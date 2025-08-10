@@ -2,87 +2,145 @@
 <html>
 <head>
     <base target="_top">
-    <!-- O seu CSS/Estilos permanecem os mesmos -->
-    <style>
-      body { font-family: 'Roboto', sans-serif; background-color: #f8f9fa; margin: 0; padding: 24px; color: #3c4043; }
-      h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: #202124; }
-      p { font-size: 14px; line-height: 1.5; margin-bottom: 20px; color: #5f6368; }
-      .form-group { margin-bottom: 20px; }
-      label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #3c4043; }
-      input[type="text"], input[type="password"], input[type="url"] { width: 100%; padding: 10px; border: 1px solid #dadce0; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
-      button { background-color: #1a73e8; color: white; border: none; padding: 12px 24px; font-size: 14px; font-weight: 500; border-radius: 8px; cursor: pointer; width: 100%; }
-      button:disabled { background-color: #e0e0e0; cursor: not-allowed; }
-      #status { margin-top: 20px; padding: 10px; border-radius: 8px; display: none; font-size: 14px; }
-      .status-success { background-color: #e6f4ea; color: #1e8e3e; }
-      .status-error { background-color: #fce8e6; color: #d93025; }
-    </style>
+    <!-- Usando Tailwind CSS para um design moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
-<body>
-    <h2>Configuração do Bot do Telegram</h2>
-    <p>Forneça as informações abaixo para conectar o seu bot.</p>
+<body class="bg-gray-100 p-4 sm:p-6 font-sans">
+    <div class="max-w-lg mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8">
+        
+        <div class="text-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Assistente de Configuração</h2>
+            <p class="text-gray-600 mt-2">Vamos conectar seu bot em 3 passos simples.</p>
+        </div>
 
-    <div class="form-group">
-      <label for="token">Token do Bot do Telegram</label>
-      <input type="password" id="token" placeholder="O token que o @BotFather lhe deu">
-    </div>
+        <!-- PASSO 1: ABRIR O EDITOR E AUTORIZAR -->
+        <div class="mb-6 p-4 border-l-4 border-indigo-500 bg-indigo-50 rounded-r-lg">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2 flex items-center">
+                <span class="bg-indigo-500 text-white rounded-full h-6 w-6 text-sm flex items-center justify-center mr-3">1</span>
+                Ative o Aplicativo Web
+            </h3>
+            <p class="text-gray-700 mb-4 text-sm">
+                Clique no botão abaixo para abrir a página de ativação. Você precisará autorizar o script a funcionar na sua conta.
+            </p>
+            <button id="openEditorButton" class="w-full inline-flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <i class="fas fa-external-link-alt mr-2"></i>
+                Abrir Página de Ativação
+            </button>
+        </div>
 
-    <div class="form-group">
-      <label for="chatId">Seu Chat ID de Administrador</label>
-      <input type="text" id="chatId" placeholder="O seu ID do @userinfobot">
-    </div>
-    
-    <div class="form-group">
-      <label for="webAppUrl">URL do App da Web</label>
-      <input type="url" id="webAppUrl" placeholder="https://script.google.com/macros/s/.../exec">
-    </div>
+        <!-- GUIA VISUAL QUE APARECE APÓS CLICAR -->
+        <div id="deploymentGuide" class="hidden mb-6 p-4 bg-gray-50 rounded-lg">
+            <h4 class="font-semibold text-gray-700 mb-3">Na nova aba, siga estes cliques:</h4>
+            <ol class="text-sm text-gray-600 space-y-2">
+                <li><i class="fas fa-arrow-right text-indigo-500"></i> Clique em <strong>"Implantar"</strong> (canto superior direito).</li>
+                <li><i class="fas fa-arrow-right text-indigo-500"></i> Selecione <strong>"Nova implantação"</strong>.</li>
+                <li><i class="fas fa-arrow-right text-indigo-500"></i> Em "Quem pode acessar", escolha <strong>"Qualquer pessoa"</strong>.</li>
+                <li><i class="fas fa-arrow-right text-indigo-500"></i> Clique em <strong>"Implantar"</strong> e autorize o acesso.</li>
+                <li><i class="fas fa-arrow-right text-indigo-500"></i> Por fim, <strong>copie a "URL do app da Web"</strong>.</li>
+            </ol>
+        </div>
 
-    <button id="submitButton">Salvar e Conectar</button>
-    <div id="status"></div>
+        <!-- PASSO 2: INSERIR DADOS -->
+        <div class="mb-6 p-4 border-l-4 border-gray-300 rounded-r-lg" id="step2">
+            <h3 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <span class="bg-gray-500 text-white rounded-full h-6 w-6 text-sm flex items-center justify-center mr-3">2</span>
+                Cole as Informações
+            </h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="webAppUrl" class="block text-sm font-medium text-gray-700">URL do App da Web (do passo anterior)</label>
+                    <input type="url" id="webAppUrl" placeholder="Cole a URL copiada aqui" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="token" class="block text-sm font-medium text-gray-700">Token do Bot do Telegram</label>
+                    <input type="password" id="token" placeholder="Token do @BotFather" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="chatId" class="block text-sm font-medium text-gray-700">Seu Chat ID de Administrador</label>
+                    <input type="text" id="chatId" placeholder="ID do @userinfobot" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+        </div>
+        
+        <!-- PASSO 3: CONECTAR -->
+        <div class="p-4 border-l-4 border-gray-300 rounded-r-lg" id="step3">
+            <h3 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <span class="bg-gray-500 text-white rounded-full h-6 w-6 text-sm flex items-center justify-center mr-3">3</span>
+                Finalizar
+            </h3>
+            <button id="submitButton" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                Salvar e Conectar
+            </button>
+        </div>
+        
+        <div id="status" class="mt-6 text-center text-sm font-medium"></div>
+    </div>
 
     <script>
-      const submitButton = document.getElementById('submitButton');
-      const statusDiv = document.getElementById('status');
-      
-      submitButton.addEventListener('click', function() {
+      document.getElementById('openEditorButton').addEventListener('click', function() {
+        this.disabled = true;
+        this.textContent = "Abrindo...";
+        
+        google.script.run
+          .withSuccessHandler(function(url) {
+            window.open(url, '_blank');
+            document.getElementById('deploymentGuide').classList.remove('hidden');
+            document.getElementById('openEditorButton').textContent = "Página de Ativação Aberta";
+          })
+          .withFailureHandler(function(error) {
+            showStatus("Não foi possível abrir o editor: " + error.message, "error");
+            document.getElementById('openEditorButton').disabled = false;
+            document.getElementById('openEditorButton').textContent = "Tentar Novamente";
+          })
+          .getScriptEditorUrl();
+      });
+
+      document.getElementById('submitButton').addEventListener('click', function() {
         const token = document.getElementById('token').value;
         const chatId = document.getElementById('chatId').value;
         const webAppUrl = document.getElementById('webAppUrl').value;
-        
-        if (!token || !chatId || !webAppUrl) {
-          showStatus("Por favor, preencha todos os campos.", "error");
+        const submitButton = this;
+
+        if (!webAppUrl || !token || !chatId) {
+          showStatus("Por favor, preencha todos os campos dos passos 2 e 3.", "error");
+          return;
+        }
+        if (!webAppUrl.startsWith("https://script.google.com/macros/s/")) {
+          showStatus("A URL do App da Web parece inválida. Verifique se você a copiou corretamente.", "error");
           return;
         }
 
         submitButton.disabled = true;
-        submitButton.textContent = "A conectar...";
-        
+        submitButton.textContent = "Conectando...";
+
         google.script.run
-          .withSuccessHandler(handleSuccess)
-          .withFailureHandler(handleError)
+          .withSuccessHandler(function(response) {
+            if (response.success) {
+              showStatus("✅ Tudo certo! O bot está conectado. Esta janela fechará em 3 segundos.", "success");
+              setTimeout(() => google.script.host.close(), 3000);
+            } else {
+              showStatus(`❌ Erro: ${response.message}`, "error");
+              submitButton.disabled = false;
+              submitButton.textContent = "Salvar e Conectar";
+            }
+          })
+          .withFailureHandler(function(error) {
+            showStatus(`❌ Erro de comunicação: ${error.message}`, "error");
+            submitButton.disabled = false;
+            submitButton.textContent = "Salvar e Conectar";
+          })
           .saveCredentialsAndSetupWebhook(token, chatId, webAppUrl);
       });
 
-      function handleSuccess(response) {
-        if (response.success) {
-          // **MENSAGEM DE SUCESSO ATUALIZADA**
-          showStatus("✅ Conectado com sucesso! Agora, vá ao seu bot no Telegram e envie a mensagem /start para iniciar a configuração.", "success");
-          submitButton.textContent = "Conectado!";
-          // Não desativa o botão para permitir reconfiguração
-        } else {
-          handleError({ message: response.message });
-        }
-      }
-
-      function handleError(error) {
-        showStatus("❌ Erro: " + error.message, "error");
-        submitButton.disabled = false;
-        submitButton.textContent = "Salvar e Conectar";
-      }
-
       function showStatus(message, type) {
+        const statusDiv = document.getElementById('status');
         statusDiv.textContent = message;
-        statusDiv.className = type;
-        statusDiv.style.display = 'block';
+        if (type === 'success') {
+          statusDiv.className = 'mt-6 text-center text-sm font-medium text-green-600';
+        } else if (type === 'error') {
+          statusDiv.className = 'mt-6 text-center text-sm font-medium text-red-600';
+        }
       }
     </script>
 </body>
