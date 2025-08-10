@@ -63,6 +63,15 @@ function initializeSystem() {
     }
 }
 
+/**
+ * Obtém a URL para o editor de scripts do projeto atual.
+ * O usuário será levado diretamente para a página correta.
+ */
+function getScriptEditorUrl() {
+  const scriptId = ScriptApp.getScriptId();
+  return `https://script.google.com/d/${scriptId}/edit`;
+}
+
 // O resto das funções (showConfigurationSidebar, getSidebarData, etc.) permanecem as mesmas
 // pois elas apenas leem e escrevem dados, independentemente de como as abas foram criadas.
 
