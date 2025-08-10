@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <!-- O seu CSS/Estilos permanecem os mesmos -->
+    <style>
+      body { font-family: 'Roboto', sans-serif; background-color: #f8f9fa; margin: 0; padding: 24px; color: #3c4043; }
+      h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: #202124; }
+      p { font-size: 14px; line-height: 1.5; margin-bottom: 20px; color: #5f6368; }
+      .form-group { margin-bottom: 20px; }
+      label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #3c4043; }
+      input[type="text"], input[type="password"], input[type="url"] { width: 100%; padding: 10px; border: 1px solid #dadce0; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+      button { background-color: #1a73e8; color: white; border: none; padding: 12px 24px; font-size: 14px; font-weight: 500; border-radius: 8px; cursor: pointer; width: 100%; }
+      button:disabled { background-color: #e0e0e0; cursor: not-allowed; }
+      #status { margin-top: 20px; padding: 10px; border-radius: 8px; display: none; font-size: 14px; }
+      .status-success { background-color: #e6f4ea; color: #1e8e3e; }
+      .status-error { background-color: #fce8e6; color: #d93025; }
+    </style>
+</head>
+<body>
+    <h2>Configuração do Bot do Telegram</h2>
+    <p>Forneça as informações abaixo para conectar o seu bot.</p>
+
+    <div class="form-group">
+      <label for="token">Token do Bot do Telegram</label>
+      <input type="password" id="token" placeholder="O token que o @BotFather lhe deu">
+    </div>
+
+    <div class="form-group">
+      <label for="chatId">Seu Chat ID de Administrador</label>
+      <input type="text" id="chatId" placeholder="O seu ID do @userinfobot">
+    </div>
+    
+    <div class="form-group">
+      <label for="webAppUrl">URL do App da Web</label>
+      <input type="url" id="webAppUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+
+    <button id="submitButton">Salvar e Conectar</button>
+    <div id="status"></div>
+
+    <script>
+      const submitButton = document.getElementById('submitButton');
+      const statusDiv = document.getElementById('status');
+      
+      submitButton.addEventListener('click', function() {
+        const token = document.getElementById('token').value;
+        const chatId = document.getElementById('chatId').value;
+        const webAppUrl = document.getElementById('webAppUrl').value;
+        
+        if (!token || !chatId || !webAppUrl) {
+          showStatus("Por favor, preencha todos os campos.", "error");
+          return;
+        }
+
+        submitButton.disabled = true;
+        submitButton.textContent = "A conectar...";
+        
+        google.script.run
+          .withSuccessHandler(handleSuccess)
+          .withFailureHandler(handleError)
+          .saveCredentialsAndSetupWebhook(token, chatId, webAppUrl);
+      });
+
+      function handleSuccess(response) {
+        if (response.success) {
+          // **MENSAGEM DE SUCESSO ATUALIZADA**
+          showStatus("✅ Conectado com sucesso! Agora, vá ao seu bot no Telegram e envie a mensagem /start para iniciar a configuração.", "success");
+          submitButton.textContent = "Conectado!";
+          // Não desativa o botão para permitir reconfiguração
+        } else {
+          handleError({ message: response.message });
+        }
+      }
+
+      function handleError(error) {
+        showStatus("❌ Erro: " + error.message, "error");
+        submitButton.disabled = false;
+        submitButton.textContent = "Salvar e Conectar";
+      }
+
+      function showStatus(message, type) {
+        statusDiv.textContent = message;
+        statusDiv.className = type;
+        statusDiv.style.display = 'block';
+      }
+    </script>
+</body>
+</html>
