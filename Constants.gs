@@ -44,6 +44,12 @@ const CACHE_KEY_TUTORIAL_STATE = 'tutorial_state';
 const CACHE_KEY_PENDING_TRANSACTIONS = 'pending_transaction';
 const CACHE_KEY_EDIT_STATE = 'edit_state';
 const CACHE_KEY_ASSISTANT_STATE = 'assistant_state'; // NOVO: Chave para o estado do assistente
+
+// *** CORREÇÃO: Constantes em falta adicionadas aqui ***
+const CACHE_KEY_TRANSACOES = 'transacoes_cache';
+const CACHE_KEY_CONTAS_A_PAGAR = 'contas_a_pagar_cache';
+// ******************************************************
+
 // NOVO: Adicionadas constantes para o token de acesso ao dashboard
 const CACHE_KEY_DASHBOARD_TOKEN = 'dashboard_access_token';
 const CACHE_EXPIRATION_DASHBOARD_TOKEN_SECONDS = 300; // 5 minutos de validade para o token
