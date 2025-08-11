@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de Comandos - Gasto Certo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'inter': ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.6s ease-out forwards',
+                        'slide-up': 'slideUp 0.8s ease-out forwards',
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .nav-fixed {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid #e2e8f0; /* slate-200 */
+            transition: box-shadow 0.3s ease;
+        }
+        .card {
+            background-color: white;
+            border-radius: 1rem; /* 16px */
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0; /* slate-200 */
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .command {
+            background-color: #eef2ff; /* indigo-50 */
+            color: #4338ca; /* indigo-800 */
+            font-family: 'Courier New', Courier, monospace;
+            padding: 0.25rem 0.625rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            border: 1px solid #c7d2fe; /* indigo-200 */
+        }
+        .command-copyable {
+            background-color: #f1f5f9; /* slate-100 */
+            color: #475569; /* slate-600 */
+            font-family: 'Courier New', Courier, monospace;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            display: inline-block;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid #e2e8f0; /* slate-200 */
+        }
+        .command-copyable:hover {
+            background-color: #e2e8f0; /* slate-200 */
+            color: #1e293b; /* slate-800 */
+        }
+        .icon-gradient {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .search-container {
+            position: relative;
+        }
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+            border: 1px solid #e2e8f0;
+        }
+        .search-result-item {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .search-result-item:hover {
+            background-color: #f8fafc;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+<body class="text-slate-700 antialiased font-inter">
+
+    <nav id="fixedNav" class="nav-fixed">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-robot text-3xl icon-gradient"></i>
+                    <span class="font-bold text-xl text-slate-800">Gasto Certo</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#lancamentos" class="text-slate-600 hover:text-indigo-600 font-semibold transition-colors">Lançamentos</a>
+                    <a href="#consultas" class="text-slate-600 hover:text-indigo-600 font-semibold transition-colors">Consultas</a>
+                    <a href="#tarefas" class="text-slate-600 hover:text-indigo-600 font-semibold transition-colors">Tarefas</a>
+                    <a href="#configuracao" class="text-slate-600 hover:text-indigo-600 font-semibold transition-colors">Configuração</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto p-4 sm:p-8">
+
+        <header class="text-center pt-16 pb-20">
+            <h1 class="text-5xl sm:text-6xl font-extrabold text-slate-900 mb-6 animate-slide-up">
+                Manual de Comandos
+            </h1>
+            <p class="text-xl text-slate-600 max-w-3xl mx-auto mb-10 animate-slide-up" style="animation-delay: 0.2s;">
+                Bem-vindo ao seu assistente financeiro e de produtividade! Use este guia para explorar todo o poder do seu bot no Telegram.
+            </p>
+            
+            <div class="search-container max-w-lg mx-auto animate-slide-up" style="animation-delay: 0.4s;">
+                <div class="relative">
+                    <input type="text" id="searchInput" placeholder="Buscar comandos (ex: /saldo, tarefa, etc...)" class="w-full px-4 py-3 pl-12 bg-white border border-slate-300 rounded-full text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+                    <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                </div>
+                <div id="searchResults" class="search-results"></div>
+            </div>
+        </header>
+
+        <main class="space-y-20">
+
+            <section id="lancamentos" class="animate-fade-in">
+                <h2 class="text-3xl font-bold mb-10 text-center text-slate-800">💸 Lançamentos: A Magia da Linguagem Natural</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="card p-8">
+                        <div class="flex items-center mb-4"><div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mr-4 text-2xl text-red-500"><i class="fas fa-arrow-down"></i></div><h3 class="text-xl font-bold text-slate-800">Despesas</h3></div>
+                        <p class="text-slate-600 mb-4">Use `gastei`, `paguei`, `comprei`.</p>
+                        <div class="space-y-3"><code class="command-copyable" onclick="copyCommand(this)">gastei 50 no mercado com Nubank</code><code class="command-copyable" onclick="copyCommand(this)">paguei 2200 da fatura com Itau</code></div>
+                    </div>
+                    <div class="card p-8">
+                        <div class="flex items-center mb-4"><div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mr-4 text-2xl text-green-500"><i class="fas fa-arrow-up"></i></div><h3 class="text-xl font-bold text-slate-800">Receitas</h3></div>
+                        <p class="text-slate-600 mb-4">Use `recebi`, `ganhei`.</p>
+                        <div class="space-y-3"><code class="command-copyable" onclick="copyCommand(this)">recebi 3000 de salario no Itau</code><code class="command-copyable" onclick="copyCommand(this)">recebi 500 de freelance</code></div>
+                    </div>
+                    <div class="card p-8">
+                        <div class="flex items-center mb-4"><div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mr-4 text-2xl text-blue-500"><i class="fas fa-exchange-alt"></i></div><h3 class="text-xl font-bold text-slate-800">Transferências</h3></div>
+                        <p class="text-slate-600 mb-4">Use `transferi`, `enviei`.</p>
+                        <div class="space-y-3"><code class="command-copyable" onclick="copyCommand(this)">transferi 200 do Itau para o Mercado Pago</code></div>
+                    </div>
+                    <div class="card p-8">
+                        <div class="flex items-center mb-4"><div class="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mr-4 text-2xl text-purple-500"><i class="fas fa-layer-group"></i></div><h3 class="text-xl font-bold text-slate-800">Parcelamentos</h3></div>
+                        <p class="text-slate-600 mb-4">Adicione `em X vezes` no final.</p>
+                        <div class="space-y-3"><code class="command-copyable" onclick="copyCommand(this)">comprei um telemóvel de 1200 em 10x</code></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="consultas" class="animate-fade-in">
+                <h2 class="text-3xl font-bold mb-10 text-center text-slate-800">📊 Consultas e Relatórios</h2>
+                <div class="card p-8">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
+                        <div><p class="font-semibold text-slate-800"><span class="command">/resumo</span></p><p class="text-sm text-slate-500 mt-1">Visão geral do mês.</p></div>
+                        <div><p class="font-semibold text-slate-800"><span class="command">/saldo</span></p><p class="text-sm text-slate-500 mt-1">Saldos de contas e cartões.</p></div>
+                        <div><p class="font-semibold text-slate-800"><span class="command">/extrato</span></p><p class="text-sm text-slate-500 mt-1">Últimas transações.</p></div>
+                        <div><p class="font-semibold text-slate-800"><span class="command">/contasapagar</span></p><p class="text-sm text-slate-500 mt-1">Contas fixas do mês.</p></div>
+                        <div><p class="font-semibold text-slate-800"><span class="command">/metas</span></p><p class="text-sm text-slate-500 mt-1">Progresso das suas metas.</p></div>
+                        <div><p class="font-semibold text-slate-800"><span class="command">/proximasfaturas</span></p><p class="text-sm text-slate-500 mt-1">Planeamento de faturas.</p></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tarefas" class="animate-fade-in">
+                <h2 class="text-3xl font-bold mb-10 text-center text-slate-800">🗓️ Tarefas e Lembretes</h2>
+                <div class="card p-8">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                        <div>
+                            <h4 class="font-bold text-xl text-slate-800 mb-4">Criar Tarefas</h4>
+                            <p class="text-slate-600 mb-4">Use <span class="command">/tarefa</span> ou <span class="command">/lembrete</span> com linguagem natural.</p>
+                            <div class="space-y-3"><code class="command-copyable" onclick="copyCommand(this)">/tarefa Reunião amanhã às 10h</code><code class="command-copyable" onclick="copyCommand(this)">/lembrete Ligar para o cliente na sexta</code></div>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-xl text-slate-800 mb-4">Gerir Tarefas</h4>
+                            <ul class="text-slate-600 space-y-3">
+                                <li><span class="command">/tarefas</span> ou <span class="command">/agenda</span> - Lista tarefas pendentes.</li>
+                                <li><span class="command">/concluir &lt;ID&gt;</span> - Marca uma tarefa como concluída.</li>
+                                <li><span class="command">/excluir_tarefa &lt;ID&gt;</span> - Apaga uma tarefa.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="configuracao" class="animate-fade-in">
+                <h2 class="text-3xl font-bold mb-10 text-center text-slate-800">🛠️ Configuração e Gestão</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="card p-8">
+                        <h4 class="font-bold text-xl text-slate-800 mb-4">Contas</h4>
+                        <p class="text-slate-600 mb-4">Ensine o bot sobre as suas contas.</p>
+                         <ul class="text-slate-600 space-y-3">
+                            <li><span class="command">/adicionar_conta</span> <small>&lt;Nome&gt; &lt;Tipo&gt;</small></li>
+                            <li><span class="command">/listar_contas</span></li>
+                        </ul>
+                    </div>
+                    <div class="card p-8">
+                        <h4 class="font-bold text-xl text-slate-800 mb-4">Categorias</h4>
+                        <p class="text-slate-600 mb-4">Personalize os seus tipos de gastos.</p>
+                         <ul class="text-slate-600 space-y-3">
+                            <li><span class="command">/adicionar_categoria</span> <small>&lt;Cat&gt; &lt;Sub&gt; &lt;palavra&gt;</small></li>
+                            <li><span class="command">/listar_categorias</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="text-center mt-20 pt-12 border-t border-slate-200">
+            <p class="text-slate-500">&copy; 2025 Gasto Certo. O seu controlo financeiro simplificado.</p>
+        </footer>
+
+    </div>
+
+    <button id="backToTop" class="fixed bottom-8 right-8 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 hover:shadow-xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center justify-center text-2xl">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const backToTop = document.getElementById('backToTop');
+            const searchInput = document.getElementById('searchInput');
+            const searchResults = document.getElementById('searchResults');
+
+            const commands = [
+                { command: '/resumo', description: 'Visão geral do mês', section: 'consultas' },
+                { command: '/saldo', description: 'Saldos de contas e cartões', section: 'consultas' },
+                { command: '/extrato', description: 'Últimas transações', section: 'consultas' },
+                { command: '/contasapagar', description: 'Contas fixas do mês', section: 'consultas' },
+                { command: '/metas', description: 'Progresso das suas metas', section: 'consultas' },
+                { command: '/proximasfaturas', description: 'Planeamento de faturas', section: 'consultas' },
+                { command: '/tarefa', description: 'Criar nova tarefa', section: 'tarefas' },
+                { command: '/lembrete', description: 'Criar novo lembrete', section: 'tarefas' },
+                { command: '/tarefas', description: 'Lista tarefas pendentes', section: 'tarefas' },
+                { command: '/agenda', description: 'Lista tarefas pendentes', section: 'tarefas' },
+                { command: '/concluir', description: 'Marca tarefa como concluída', section: 'tarefas' },
+                { command: '/excluir_tarefa', description: 'Apaga uma tarefa', section: 'tarefas' },
+                { command: '/adicionar_conta', description: 'Adiciona nova conta', section: 'configuracao' },
+                { command: '/listar_contas', description: 'Lista todas as contas', section: 'configuracao' },
+                { command: '/adicionar_categoria', description: 'Adiciona nova categoria', section: 'configuracao' },
+                { command: '/listar_categorias', description: 'Lista todas as categorias', section: 'configuracao' },
+                { command: '/dashboard', description: 'Dashboard web com gráficos', section: 'outros' },
+                { command: '/editar ultimo', description: 'Corrige último lançamento', section: 'outros' },
+                { command: 'gastei', description: 'Registar despesa', section: 'lancamentos' },
+                { command: 'paguei', description: 'Registar pagamento', section: 'lancamentos' },
+                { command: 'comprei', description: 'Registar compra', section: 'lancamentos' },
+                { command: 'recebi', description: 'Registar receita', section: 'lancamentos' },
+                { command: 'ganhei', description: 'Registar ganho', section: 'lancamentos' },
+                { command: 'transferi', description: 'Registar transferência', section: 'lancamentos' },
+                { command: 'enviei', description: 'Registar envio', section: 'lancamentos' }
+            ];
+
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 300) {
+                    backToTop.classList.remove('opacity-0', 'pointer-events-none');
+                } else {
+                    backToTop.classList.add('opacity-0', 'pointer-events-none');
+                }
+            });
+
+            backToTop.addEventListener('click', () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                if (query.length < 2) {
+                    searchResults.style.display = 'none';
+                    return;
+                }
+                const filtered = commands.filter(cmd => cmd.command.toLowerCase().includes(query) || cmd.description.toLowerCase().includes(query));
+                if (filtered.length > 0) {
+                    searchResults.innerHTML = filtered.map(cmd => `
+                        <div class="search-result-item" onclick="scrollToSection('${cmd.section}')">
+                            <strong class="text-indigo-600">${cmd.command}</strong>
+                            <div class="text-sm text-slate-500">${cmd.description}</div>
+                        </div>
+                    `).join('');
+                    searchResults.style.display = 'block';
+                } else {
+                    searchResults.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-container')) {
+                    searchResults.style.display = 'none';
+                }
+            });
+        });
+
+        function scrollToSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if(section) {
+                const yOffset = -80; // Offset for the sticky nav
+                const y = section.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                window.scrollTo({top: y, behavior: 'smooth'});
+            }
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('searchInput').value = '';
+        }
+
+        function copyCommand(element) {
+            const commandText = element.textContent;
+            navigator.clipboard.writeText(commandText).then(() => {
+                const originalText = element.innerHTML;
+                element.innerHTML = '<i class="fas fa-check mr-2"></i> Copiado!';
+                element.classList.add('bg-green-100', 'text-green-700');
+                setTimeout(() => {
+                    element.innerHTML = originalText;
+                    element.classList.remove('bg-green-100', 'text-green-700');
+                }, 1500);
+            });
+        }
+    </script>
+
+</body>
+</html>
