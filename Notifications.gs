@@ -420,3 +420,169 @@ function getNotificationConfig() {
   }
   return notificationConfig;
 }
+
+
+/**
+ * ANALISA OS GASTOS DA ÚLTIMA SEMANA E ENVIA UM INSIGHT INTELIGENTE E PERSONALIZADO.
+ * Esta função foi projetada para ser executada por um gatilho semanal (ex: todos os domingos).
+ */
+function enviarInsightSemanal() {
+  logToSheet("Iniciando geração de Insights Semanais.", "INFO");
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+  const configSheet = ss.getSheetByName(SHEET_CONFIGURACOES);
+
+  if (!transacoesSheet || !configSheet) {
+    logToSheet("Aba 'Transacoes' ou 'Configuracoes' não encontrada para Insight Semanal.", "ERROR");
+    return;
+  }
+
+  const transacoes = transacoesSheet.getDataRange().getValues();
+  const config = configSheet.getDataRange().getValues();
+
+  // Obter todos os usuários configurados
+  const usuarios = config.filter(row => row[0] === 'chatId').map(row => ({
+    chatId: row[1],
+    nome: row[2]
+  }));
+
+  // Para cada usuário, gerar e enviar o insight
+  usuarios.forEach(usuario => {
+    gerarEEnviarInsightParaUsuario(usuario, transacoes);
+    Utilities.sleep(1000); // Pausa para evitar limites de taxa do Telegram
+  });
+
+  logToSheet("Geração de Insights Semanais concluída.", "INFO");
+}
+
+/**
+ * Função auxiliar que gera e envia o insight para um único usuário.
+ * @param {object} usuario Objeto com {chatId, nome}.
+ * @param {Array<Array<any>>} transacoes Todos os dados da aba de transações.
+ */
+function gerarEEnviarInsightParaUsuario(usuario, transacoes) {
+  const { chatId, nome } = usuario;
+
+  // 1. Definir o período da semana passada (Domingo a Sábado)
+  const hoje = new Date();
+  const diaDaSemana = hoje.getDay(); // 0=Domingo, 6=Sábado
+  const fimDaSemana = new Date(hoje);
+  fimDaSemana.setDate(hoje.getDate() - diaDaSemana - 1); // Fim no último sábado
+  fimDaSemana.setHours(23, 59, 59, 999);
+  
+  const inicioDaSemana = new Date(fimDaSemana);
+  inicioDaSemana.setDate(fimDaSemana.getDate() - 6); // Início no último domingo
+  inicioDaSemana.setHours(0, 0, 0, 0);
+
+  // 2. Calcular gastos da semana por categoria
+  const gastosSemana = {};
+  let totalGastoSemana = 0;
+
+  for (let i = 1; i < transacoes.length; i++) {
+    const linha = transacoes[i];
+    const dataTransacao = parseData(linha[0]);
+    
+    if (dataTransacao >= inicioDaSemana && dataTransacao <= fimDaSemana) {
+      const tipo = (linha[4] || "").toLowerCase();
+      const categoria = linha[2];
+      const valor = parseBrazilianFloat(String(linha[5]));
+
+      if (tipo === "despesa" && categoria && categoria.trim() !== "🔄 Transferências") {
+        gastosSemana[categoria] = (gastosSemana[categoria] || 0) + valor;
+        totalGastoSemana += valor;
+      }
+    }
+  }
+
+  if (totalGastoSemana === 0) {
+    logToSheet(`Nenhum gasto encontrado na última semana para ${nome}. Insight não enviado.`, "INFO");
+    return;
+  }
+
+  // 3. Encontrar a categoria com o maior gasto absoluto
+  const categoriaMaiorGasto = Object.keys(gastosSemana).reduce((a, b) => gastosSemana[a] > gastosSemana[b] ? a : b);
+  const valorMaiorGasto = gastosSemana[categoriaMaiorGasto];
+
+  // 4. Calcular a média histórica e a variação para TODAS as categorias da semana
+  const inicioHistorico = new Date(inicioDaSemana);
+  inicioHistorico.setDate(inicioDaSemana.getDate() - (8 * 7)); // 8 semanas atrás
+  
+  const analisesCategorias = {};
+
+  for (const categoriaDaSemana in gastosSemana) {
+    let gastoHistorico = 0;
+    let semanasComGasto = new Set();
+
+    for (let i = 1; i < transacoes.length; i++) {
+      const linha = transacoes[i];
+      const dataTransacao = parseData(linha[0]);
+
+      if (dataTransacao >= inicioHistorico && dataTransacao < inicioDaSemana) {
+        if ((linha[4] || "").toLowerCase() === "despesa" && linha[2] === categoriaDaSemana) {
+          gastoHistorico += parseBrazilianFloat(String(linha[5]));
+          const semanaDoAno = Utilities.formatDate(dataTransacao, Session.getScriptTimeZone(), "w");
+          semanasComGasto.add(semanaDoAno);
+        }
+      }
+    }
+    
+    const numSemanas = semanasComGasto.size > 0 ? semanasComGasto.size : 1;
+    const mediaSemanalHistorica = gastoHistorico / numSemanas;
+    
+    if (mediaSemanalHistorica > 0) {
+      const diferencaPercentual = ((gastosSemana[categoriaDaSemana] - mediaSemanalHistorica) / mediaSemanalHistorica) * 100;
+      analisesCategorias[categoriaDaSemana] = {
+        percentual: diferencaPercentual,
+        media: mediaSemanalHistorica
+      };
+    }
+  }
+
+  // 5. Encontrar a categoria com a maior VARIAÇÃO (aumento)
+  let categoriaMaiorVariacao = null;
+  let maiorVariacao = -Infinity; // Inicia com valor muito baixo para encontrar a maior variação
+
+  for (const categoria in analisesCategorias) {
+    if (analisesCategorias[categoria].percentual > maiorVariacao) {
+      maiorVariacao = analisesCategorias[categoria].percentual;
+      categoriaMaiorVariacao = categoria;
+    }
+  }
+
+  // 6. Gerar o insight e formatar a mensagem
+  const nomeFormatado = escapeMarkdown(nome.split(' ')[0]);
+  let mensagem = `💡 *Seu Insight Semanal do Gasto Certo*\n\n` +
+                 `Olá, ${nomeFormatado}! Aqui está a sua análise da semana que passou:\n\n` +
+                 `🥇 *Maior Gasto:*\n` +
+                 `Sua maior despesa foi com *${escapeMarkdown(categoriaMaiorGasto)}*, totalizando *${formatCurrency(valorMaiorGasto)}*.\n\n`;
+  
+  let analise = "";
+  // Adiciona a análise da MAIOR VARIAÇÃO, se for interessante
+  if (categoriaMaiorVariacao && maiorVariacao > 20) { // Limite de 20% para ser considerado um "destaque"
+      const media = analisesCategorias[categoriaMaiorVariacao].media;
+      analise = `👀 *Destaque da Semana:*\n` +
+                `Notamos uma mudança nos seus hábitos! Seus gastos com *${escapeMarkdown(categoriaMaiorVariacao)}* tiveram um aumento de *${maiorVariacao.toFixed(0)}%* em relação à sua média semanal de ${formatCurrency(media)}.`;
+  } 
+  // Se não houver variação notável, analisa a categoria principal
+  else if (analisesCategorias[categoriaMaiorGasto]) {
+    const { percentual, media } = analisesCategorias[categoriaMaiorGasto];
+    if (percentual > 15) {
+      analise = `👀 *Análise do Maior Gasto:*\n` +
+                `Este valor é *${percentual.toFixed(0)}% superior* à sua média semanal de ${formatCurrency(media)} para esta categoria.`;
+    } else {
+      analise = `👀 *Análise do Maior Gasto:*\n` +
+                `O seu gasto nesta categoria está *dentro da sua média semanal* de ${formatCurrency(media)}.`;
+    }
+  }
+
+  if (analise) {
+    mensagem += `${analise}\n\n`;
+  }
+
+  mensagem += `_Continue a registar para receber mais insights!_`;
+
+  enviarMensagemTelegram(chatId, mensagem);
+  logToSheet(`Insight Semanal enviado com sucesso para ${nome} (${chatId}).`, "INFO");
+}
+
