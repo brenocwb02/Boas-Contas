@@ -2209,7 +2209,7 @@ function enviarSaudeFinanceira(chatId, usuario) {
   mensagem += `● *Taxa de Poupança:* ${emojiPoupanca} ${taxaDePoupanca.toFixed(0)}%\n_${escapeMarkdown(textoPoupanca)}_\n\n`;
 
   // Rendimento Comprometido
-  let emojiComprometido = "?";
+  let emojiComprometido = "�";
   let textoComprometido = `${percRendimentoComprometido.toFixed(0)}% do seu rendimento está alocado a faturas e contas a pagar.`;
   if (percRendimentoComprometido > 50) {
     emojiComprometido = "🔴";
