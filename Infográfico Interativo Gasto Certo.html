@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guia Rápido Gasto Certo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .command-tag {
+            background-color: #eef2ff;
+            color: #4338ca;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            display: inline-block;
+        }
+        .icon-circle {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="max-w-4xl mx-auto p-4 sm:p-8">
+
+        <header class="text-center mb-12">
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-slate-900 mb-4">
+                Guia Rápido Gasto Certo 🤖
+            </h1>
+            <p class="text-lg text-slate-600 max-w-2xl mx-auto">
+                O seu assistente financeiro e de produtividade pessoal no Telegram. Descubra como usar todo o poder do seu bot!
+            </p>
+        </header>
+
+        <main class="space-y-10">
+
+            <section id="lancamentos">
+                <h2 class="text-2xl font-bold mb-6 text-center text-indigo-700">💸 Lançamentos: A Magia da Linguagem Natural</h2>
+                <p class="text-center text-slate-600 mb-8">A forma mais rápida de usar o bot é simplesmente "falar" com ele. Não se preocupe com uma ordem fixa.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <div class="card p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="icon-circle bg-red-500 mr-4"><i class="fas fa-shopping-cart"></i></div>
+                            <h3 class="text-xl font-bold">Lançar uma Despesa</h3>
+                        </div>
+                        <p class="text-slate-600 mb-4">Use palavras como `gastei`, `paguei`, `comprei`.</p>
+                        <div class="bg-slate-50 p-4 rounded-lg text-sm space-y-2">
+                            <p><strong class="text-slate-700">Básico:</strong> `gastei 50 no mercado com Nubank`</p>
+                            <p><strong class="text-slate-700">Com Método:</strong> `paguei 30 de uber no debito do Santander`</p>
+                            <p><strong class="text-slate-700">Pagando Fatura:</strong> `paguei 2200 da fatura do Cartão Breno com Itau`</p>
+                        </div>
+                    </div>
+
+                    <div class="card p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="icon-circle bg-green-500 mr-4"><i class="fas fa-hand-holding-dollar"></i></div>
+                            <h3 class="text-xl font-bold">Lançar uma Receita</h3>
+                        </div>
+                        <p class="text-slate-600 mb-4">Use palavras como `recebi`, `ganhei`.</p>
+                        <div class="bg-slate-50 p-4 rounded-lg text-sm space-y-2">
+                            <p><strong class="text-slate-700">Salário:</strong> `recebi 3000 de salario no Itau via PIX`</p>
+                            <p><strong class="text-slate-700">Outras Entradas:</strong> `recebi 500 de freelance no PicPay`</p>
+                        </div>
+                    </div>
+
+                    <div class="card p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="icon-circle bg-blue-500 mr-4"><i class="fas fa-exchange-alt"></i></div>
+                            <h3 class="text-xl font-bold">Lançar uma Transferência</h3>
+                        </div>
+                        <p class="text-slate-600 mb-4">Use `transferi` ou `enviei`, indicando origem e destino.</p>
+                        <div class="bg-slate-50 p-4 rounded-lg text-sm">
+                            <p>`transferi 200 do Itau para o Mercado Pago`</p>
+                        </div>
+                    </div>
+
+                    <div class="card p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="icon-circle bg-purple-500 mr-4"><i class="fas fa-credit-card"></i></div>
+                            <h3 class="text-xl font-bold">Lançar Gasto Parcelado</h3>
+                        </div>
+                        <p class="text-slate-600 mb-4">Adicione `em X vezes` ou `X parcelas` no final.</p>
+                        <div class="bg-slate-50 p-4 rounded-lg text-sm">
+                            <p>`comprei um telemóvel de 1200 em 10x no cartão Nubank`</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="consultas">
+                <h2 class="text-2xl font-bold mb-8 text-center text-indigo-700">📊 Consultas e Relatórios</h2>
+                <div class="card p-6">
+                    <ul class="space-y-6">
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/resumo</span>
+                            <div class="text-slate-600">Mostra o resumo financeiro do mês. <br><small class="text-slate-500">Ex: `/resumo junho 2024`, `/resumo Gisele`</small></div>
+                        </li>
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/saldo</span>
+                            <div class="text-slate-600">Panorama completo dos seus saldos e dívidas de cartão.</div>
+                        </li>
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/extrato</span>
+                            <div class="text-slate-600">Lista as suas últimas transações com várias opções de filtro. <br><small class="text-slate-500">Ex: `/extrato despesas`, `/extrato tudo`, `/extrato julho 2024`</small></div>
+                        </li>
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/contasapagar</span>
+                            <div class="text-slate-600">Verifica o estado das suas contas fixas do mês.</div>
+                        </li>
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/metas</span>
+                            <div class="text-slate-600">Acompanha o seu progresso em relação às metas financeiras.</div>
+                        </li>
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/proximasfaturas</span>
+                            <div class="text-slate-600">Mostra o valor já lançado nas faturas futuras dos seus cartões.</div>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+            
+            <section id="tarefas">
+                <h2 class="text-2xl font-bold mb-8 text-center text-indigo-700">🗓️ Tarefas e Lembretes</h2>
+                <div class="card p-6">
+                     <ul class="space-y-6">
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/tarefa</span>
+                            <div class="text-slate-600">Cria uma nova tarefa. O bot entende datas de forma natural. <br><small class="text-slate-500">Ex: `/tarefa Reunião com a equipa amanhã às 10h`</small></div>
+                        </li>
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/tarefas</span>
+                            <div class="text-slate-600">Lista todas as suas tarefas que ainda estão pendentes.</div>
+                        </li>
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/concluir &lt;ID&gt;</span>
+                            <div class="text-slate-600">Marca uma tarefa como concluída, usando o ID da lista.</div>
+                        </li>
+                        <li class="flex flex-col sm:flex-row items-start sm:items-center">
+                            <span class="command-tag mb-2 sm:mb-0 sm:mr-4">/excluir_tarefa &lt;ID&gt;</span>
+                            <div class="text-slate-600">Apaga permanentemente uma tarefa.</div>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <section id="outros">
+                <h2 class="text-2xl font-bold mb-8 text-center text-indigo-700">⚙️ Outros Comandos</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-2"><span class="command-tag">/dashboard</span></h3>
+                        <p class="text-slate-600">Gera um link de acesso seguro e temporário para o seu dashboard web, com gráficos e uma visão completa das suas finanças.</p>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-2"><span class="command-tag">/editar ultimo</span></h3>
+                        <p class="text-slate-600">Permite corrigir o último lançamento que você fez (valor, descrição, categoria, etc.).</p>
+                    </div>
+                     <div class="card p-6 md:col-span-2">
+                        <h3 class="text-xl font-bold mb-2"><span class="command-tag">/vincular_conta &lt;ID_CONTA&gt; &lt;ID_TRANSACAO&gt;</span></h3>
+                        <p class="text-slate-600">Vincula manualmente um lançamento de despesa a uma conta a pagar fixa, marcando-a como paga.</p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="text-center mt-12 pt-8 border-t border-slate-200">
+            <p class="text-slate-500">Gasto Certo &copy; 2025 - O seu controlo financeiro simplificado.</p>
+        </footer>
+
+    </div>
+
+</body>
+</html>
