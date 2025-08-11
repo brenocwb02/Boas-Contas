@@ -206,3 +206,53 @@ function getTelegramFile(fileId) {
   logToSheet(`Falha ao baixar o arquivo de ${fileUrl}. Código: ${fileResponse.getResponseCode()}`, "ERROR");
   return null;
 }
+
+
+/**
+ * CONFIGURA O MENU PERSISTENTE DE COMANDOS NO TELEGRAM.
+ * Esta função deve ser executada manualmente uma vez para definir ou atualizar o menu.
+ * O menu aparecerá para todos os usuários do bot.
+ */
+function setTelegramMenu() {
+  try {
+    const token = getTelegramBotToken();
+    if (!token) {
+      throw new Error("Token do Telegram não encontrado.");
+    }
+
+    // Defina aqui os comandos que aparecerão no menu
+    const commands = [
+      { command: "resumo", description: "📊 Resumo financeiro do mês" },
+      { command: "saldo", description: "💰 Ver saldos de contas e cartões" },
+      { command: "saude", description: "🩺 Fazer um check-up financeiro" }, // <-- NOVA LINHA AQUI
+      { command: "extrato", description: "📄 Listar últimas transações" },
+      { command: "tarefas", description: "📝 Ver tarefas pendentes" },
+      { command: "dashboard", description: "🌐 Abrir o dashboard web" },
+      { command: "ajuda", description: "❓ Ver todos os comandos" }
+    ];
+
+    const url = `${URL_BASE_TELEGRAM}${token}/setMyCommands`;
+
+    const payload = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify({ commands: commands }),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(url, payload);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    if (responseCode === 200 && JSON.parse(responseText).ok) {
+      logToSheet("Menu de comandos do Telegram configurado com sucesso.", "INFO");
+      SpreadsheetApp.getUi().alert("Sucesso!", "O menu de comandos do bot foi atualizado com sucesso.", SpreadsheetApp.getUi().ButtonSet.OK);
+    } else {
+      throw new Error(`Falha ao configurar o menu. Código: ${responseCode}. Resposta: ${responseText}`);
+    }
+
+  } catch (e) {
+    logToSheet(`ERRO FATAL em setTelegramMenu: ${e.message}`, "ERROR");
+    SpreadsheetApp.getUi().alert("Erro", `Ocorreu um erro ao configurar o menu do bot: ${e.message}`, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
