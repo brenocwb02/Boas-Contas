@@ -63,6 +63,7 @@ function initializeSystem() {
     }
 }
 
+
 /**
  * Obtém a URL para o editor de scripts do projeto atual.
  * O usuário será levado diretamente para a página correta.
