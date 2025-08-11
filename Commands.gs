@@ -388,49 +388,52 @@ function enviarSaldo(chatId, usuario) {
  */
 function enviarAjuda(chatId) {
   const mensagem = `
-📌*Como usar o Bot:*
+👋 *Bem-vindo ao Gasto Certo!*
 
-Para registrar transacoes, envie uma mensagem no formato livre, incluindo valor, descricao, metodo de pagamento e conta/cartao. Quanto mais detalhes, melhor!
+Aqui está um guia rápido dos comandos. Use os botões abaixo para acesso rápido!
 
-*💸 Para Gastos (Despesas):*
-Use palavras como _gastei_, _paguei_, _comprei_.
-• Ex: \`gastei 50 no mercado com Cartao Nubank Breno\`
-• Ex: \`paguei 50 de uber no debito do Santander\`
-• Ex: \`comprei 30 de pão com PIX do Itau\`
-• Ex: \`paguei 2200 da fatura do Cartao Nubank com Itau\` (Para pagar fatura!)
+---
+*💸 LANÇAMENTOS DO DIA-A-DIA*
+---
+Para registrar, basta enviar uma mensagem.
 
-*💰 Para Receitas:*
-Use palavras como _recebi_, _ganhei_.
-• Ex: \`recebi 3000 de salario no Itau via PIX\`
-• Ex: \`recebi 500 de freelance no Nubank por transferencia\`
-• Ex: \`recebi 200 de presente na Carteira (dinheiro fisico)\`
+*Gastos:* Use _gastei, paguei, comprei_.
+• \`gastei 50 no mercado com Nubank\`
 
-*? Dica para Receitas/Despesas:* Para que o bot entenda melhor, inclua sempre a *conta/cartao* e, se possivel, o *metodo de pagamento* (ex: PIX, debito, transferencia) na sua frase. Garanta que as palavras-chave para suas contas e metodos estao configuradas na aba \`PalavrasChave\`.
+*Receitas:* Use _recebi, ganhei_.
+• \`recebi 3000 de salario no Itau\`
 
-*🔄 Para Transferencias entre Contas:*
-Use _transferi_ ou _enviei_.
-• Ex: \`transferi 200 do Itau para o Mercado Pago\`
+*Transferências:* Use _transferi, enviei_.
+• \`transferi 200 do Itau para o Mercado Pago\`
 
-*🔢 Para Parcelamentos:*
-Apenas adicione "em X vezes" ou "X vezes" ao final da frase.
-• Ex: \`gastei 600 em roupas no Cartao Nubank Breno em 3x\`
+*Parcelamentos:* Adicione _em X vezes_ no final.
+• \`gastei 600 na C&A em 3x\`
 
-*📊 Comandos de Consulta:*
-• \`/resumo\` – Resumo financeiro do mes atual (ou use \`/resumo <mes> <ano>\` para meses anteriores, ex: \`/resumo junho 2024\`)
-• \`/saldo\` – Saldo de todas as contas e faturas (sempre o saldo atual)
-• \`/extrato\` – Ver suas ultimas transacoes (com filtro opcional, ex: \`/extrato despesas julho 2024\`)
-  • Ex: \`/extrato receitas\` (ver so receitas)
-  • Ex: \`/extrato despesas\` (ver so despesas)
-  • Ex: \`/extrato Gisele\` (ver extrato de uma pessoa)
-  • Ex: \`/extrato tudo\` (ver todas as transacoes do mes atual)
-  • Ex: \`/extrato julho 2024\` (ver todas as transacoes de julho de 2024)
-• \`/proximasfaturas\` – Veja o total de gastos ja lancados para faturas futuras
-• \`/contasapagar\` – Verifique o status das suas contas fixas do mes (ou use \`/contasapagar <mes> <ano>\`)
-• \`/vincular_conta <ID_CONTA_A_PAGAR> <ID_TRANSACAO>\` – Vincula manualmente uma transacao a uma conta a pagar fixa.
-• \`/metas\` – Acompanhe suas metas financeiras (do mes atual, ou use \`/metas <mes> <ano>\`)
-• \`/ajuda\` – Exibe esta lista de comandos
+---
+*📊 CONSULTAS E RELATÓRIOS*
+---
+• \`/resumo\` – Resumo financeiro do mês.
+• \`/saldo\` – Saldo de todas as contas e faturas.
+• \`/extrato\` – Suas últimas transações.
+• \`/contasapagar\` – Status das suas contas fixas.
+• \`/metas\` – Acompanhe suas metas.
+• \`/proximasfaturas\` – Veja faturas futuras.
 
-*? Dica:* Use sempre os *nomes exatos* das suas Contas e Cartões (ex: "Cartao Nubank Breno", "Itau", "Mercado Pago"). Se o bot não entender sua mensagem, tente reformular de forma mais simples e direta.
+---
+*🗓️ TAREFAS E LEMBRETES*
+---
+• \`/tarefa\` - Cria uma nova tarefa.
+  Ex: \`/tarefa Reunião amanhã às 10h\`
+• \`/tarefas\` – Lista suas tarefas pendentes.
+• \`/concluir <ID>\` – Marca uma tarefa como concluída.
+• \`/excluir_tarefa <ID>\` - Apaga uma tarefa.
+
+---
+*⚙️ OUTROS COMANDOS*
+---
+• \`/dashboard\` – Aceder ao dashboard web.
+• \`/editar ultimo\` – Corrigir o último lançamento.
+• \`/ajuda\` – Ver esta mensagem novamente.
   `;
 
   const teclado = {
@@ -441,22 +444,21 @@ Apenas adicione "em X vezes" ou "X vezes" ao final da frase.
       ],
       [
         { text: "📄 Extrato", callback_data: "/extrato" },
-        { text: "🎯 Metas", callback_data: "/metas" }
+        { text: "📝 Tarefas", callback_data: "/tarefas" }
       ],
       [
-        { text: "🧾 Proximas Faturas", callback_data: "/proximasfaturas" },
+        { text: "🎯 Metas", callback_data: "/metas" },
         { text: "🗓️ Contas a Pagar", callback_data: "/contasapagar" }
+      ],
+      [
+        { text: "🌐 Dashboard Web", callback_data: "/dashboard" }
       ]
     ]
   };
 
-  const config = SpreadsheetApp.getActiveSpreadsheet()
-    .getSheetByName(SHEET_CONFIGURACOES)
-    .getDataRange()
-    .getValues();
-
   enviarMensagemTelegram(chatId, mensagem, { reply_markup: teclado });
 }
+
 
 /**
  * Envia o progresso das metas financeiras para o chat do Telegram.
@@ -2107,4 +2109,118 @@ function enviarResumoPorPessoa(chatId, solicitante, usuarioAlvo, mes, ano) {
 
   enviarMensagemTelegram(chatId, mensagemResumo);
   logToSheet(`Resumo por pessoa enviado para ${chatId} para o usuário ${usuarioAlvo}.`, "INFO");
+}
+
+
+/**
+ * CALCULA E ENVIA UM CHECK-UP DA SAÚDE FINANCEIRA DO MÊS ATUAL.
+ * Analisa a taxa de poupança, rendimento comprometido e gasto diário.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} usuario O nome do usuário.
+ */
+function enviarSaudeFinanceira(chatId, usuario) {
+  logToSheet(`Iniciando Check-up Financeiro para ${usuario} (${chatId}).`, "INFO");
+
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth();
+  const anoAtual = hoje.getFullYear();
+  const nomeMes = getNomeMes(mesAtual);
+
+  // Obter dados necessários
+  const transacoes = getSheetDataWithCache(SHEET_TRANSACOES, CACHE_KEY_TRANSACOES, 60); // Cache mais curto para dados voláteis
+  const contasAPagar = getSheetDataWithCache(SHEET_CONTAS_A_PAGAR, CACHE_KEY_CONTAS_A_PAGAR, 300);
+  
+  let receitasMes = 0;
+  let despesasMes = 0;
+
+  // 1. Calcular Receitas e Despesas do Mês
+  for (let i = 1; i < transacoes.length; i++) {
+    const linha = transacoes[i];
+    const dataTransacao = parseData(linha[0]);
+    
+    if (dataTransacao && dataTransacao.getMonth() === mesAtual && dataTransacao.getFullYear() === anoAtual) {
+      const tipo = (linha[4] || "").toLowerCase();
+      const categoria = normalizarTexto(linha[2]);
+      const subcategoria = normalizarTexto(linha[3]);
+      const valor = parseBrazilianFloat(String(linha[5]));
+
+      // Ignorar transferências e pagamentos de fatura para um cálculo de fluxo de caixa real
+      const isIgnored = (categoria === "transferencias" && subcategoria === "entre contas") ||
+                        (categoria === "contas a pagar" && subcategoria === "pagamento de fatura");
+
+      if (!isIgnored) {
+        if (tipo === "receita") {
+          receitasMes += valor;
+        } else if (tipo === "despesa") {
+          despesasMes += valor;
+        }
+      }
+    }
+  }
+
+  // 2. Calcular Rendimento Comprometido (Contas a Pagar + Faturas de Cartão)
+  let totalContasAPagarMes = 0;
+  for (let i = 1; i < contasAPagar.length; i++) {
+    const linha = contasAPagar[i];
+    const dataVencimento = parseData(linha[4]); // Coluna 'Data de Vencimento'
+    if (dataVencimento && dataVencimento.getMonth() === mesAtual && dataVencimento.getFullYear() === anoAtual) {
+      totalContasAPagarMes += parseBrazilianFloat(String(linha[3])); // Coluna 'Valor'
+    }
+  }
+  
+  // Usar a função de saldo para obter as dívidas de cartão
+  atualizarSaldosDasContas();
+  let totalFaturasPagar = 0;
+  for (const nomeNormalizado in globalThis.saldosCalculados) {
+      const infoConta = globalThis.saldosCalculados[nomeNormalizado];
+      if (infoConta.tipo === "cartão de crédito" || infoConta.tipo === "fatura consolidada") {
+        totalFaturasPagar += infoConta.faturaAtual; // Usamos a fatura do ciclo atual
+      }
+  }
+
+  const rendimentoComprometidoTotal = totalContasAPagarMes + totalFaturasPagar;
+
+  // 3. Calcular os Indicadores
+  let taxaDePoupanca = 0;
+  if (receitasMes > 0) {
+    taxaDePoupanca = ((receitasMes - despesasMes) / receitasMes) * 100;
+  }
+
+  let percRendimentoComprometido = 0;
+  if (receitasMes > 0) {
+    percRendimentoComprometido = (rendimentoComprometidoTotal / receitasMes) * 100;
+  }
+  
+  const gastoDiarioMedio = despesasMes / hoje.getDate();
+
+  // 4. Formatar a Mensagem
+  let mensagem = `🩺 *Check-up Financeiro de ${nomeMes} de ${anoAtual}*\n\n`;
+
+  // Taxa de Poupança
+  let emojiPoupanca = "🟠";
+  let textoPoupanca = `Você está a poupar ${taxaDePoupanca.toFixed(0)}% do que ganha.`;
+  if (taxaDePoupanca >= 20) {
+    emojiPoupanca = "🟢";
+    textoPoupanca += " Excelente!";
+  } else if (taxaDePoupanca < 0) {
+    emojiPoupanca = "🔴";
+    textoPoupanca = `Você está a gastar ${Math.abs(taxaDePoupanca).toFixed(0)}% a mais do que ganha. Atenção!`;
+  }
+  mensagem += `● *Taxa de Poupança:* ${emojiPoupanca} ${taxaDePoupanca.toFixed(0)}%\n_${escapeMarkdown(textoPoupanca)}_\n\n`;
+
+  // Rendimento Comprometido
+  let emojiComprometido = "?";
+  let textoComprometido = `${percRendimentoComprometido.toFixed(0)}% do seu rendimento está alocado a faturas e contas a pagar.`;
+  if (percRendimentoComprometido > 50) {
+    emojiComprometido = "🔴";
+    textoComprometido += " Nível elevado, requer atenção.";
+  } else if (percRendimentoComprometido > 30) {
+    emojiComprometido = "🟠";
+  }
+  mensagem += `● *Rendimento Comprometido:* ${emojiComprometido} ${percRendimentoComprometido.toFixed(0)}%\n_${escapeMarkdown(textoComprometido)}_\n\n`;
+
+  // Gasto Diário Médio
+  mensagem += `● *Gasto Diário Médio:* 💸 ${formatCurrency(gastoDiarioMedio)}\n_Até agora, este é o seu gasto médio por dia neste mês._`;
+
+  enviarMensagemTelegram(chatId, mensagem);
 }
