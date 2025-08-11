@@ -139,6 +139,24 @@ function doPost(e) {
         comandoBase = "/complete_assistant_action";
         complemento = textoRecebido.substring('complete_'.length);
       }
+      // --- TAREFAS: Lógica para os botões inline (callbacks) ---
+      else if (textoRecebido.startsWith('add_agenda_')) {
+        const idTarefa = textoRecebido.substring('add_agenda_'.length);
+        adicionarTarefaNaAgenda(chatId, idTarefa);
+        return; // Finaliza a execução
+      }
+      else if (textoRecebido.startsWith('concluir_tarefa_')) {
+        const idTarefa = textoRecebido.substring('concluir_tarefa_'.length);
+        concluirTarefa(chatId, idTarefa);
+        return; // Finaliza a execução
+      }
+      // --- TAREFAS: NOVO CALLBACK PARA EXCLUIR TAREFA ---
+      else if (textoRecebido.startsWith('excluir_tarefa_')) {
+        const idTarefa = textoRecebido.substring('excluir_tarefa_'.length);
+        excluirTarefa(chatId, idTarefa);
+        return; // Finaliza a execução
+      }
+      // --- FIM TAREFAS ---
       else if (textoRecebido.startsWith('/tutorial_')) {
         comandoBase = textoRecebido;
         complemento = "";
@@ -173,7 +191,14 @@ function doPost(e) {
       
       const comandoNormalizado = primeiraPalavra.startsWith('/') ? primeiraPalavra.substring(1) : primeiraPalavra;
 
-      const comandosConhecidosSemBarra = ["start", "dashboard", "resumo", "saldo", "extrato", "proximasfaturas", "contasapagar", "metas", "ajuda", "editar", "vincular_conta", "tutorial", "adicionar_conta", "listar_contas", "adicionar_categoria", "listar_categorias", "listar_subcategorias"];
+      // --- TAREFAS: Adicionar novos comandos conhecidos ---
+      const comandosConhecidosSemBarra = [
+          "start", "dashboard", "resumo", "saldo", "extrato", "proximasfaturas", 
+          "contasapagar", "metas", "ajuda", "editar", "vincular_conta", "tutorial", 
+          "adicionar_conta", "listar_contas", "adicionar_categoria", "listar_categorias", 
+          "listar_subcategorias", "tarefa", "lembrete", "tarefas", "agenda", "concluir", 
+          "excluir_tarefa", "saude" 
+      ];
 
       if (comandosConhecidosSemBarra.includes(comandoNormalizado)) {
           comandoBase = `/${comandoNormalizado}`;
@@ -311,6 +336,42 @@ function doPost(e) {
         logToSheet(`Comando /dashboard detectado.`, "INFO");
         enviarLinkDashboard(chatId);
         return;
+
+      // --- TAREFAS: NOVOS COMANDOS PARA O MÓDULO DE TAREFAS ---
+      case "/tarefa":
+      case "/lembrete":
+          logToSheet(`Comando /tarefa ou /lembrete detectado. Complemento: "${complemento}"`, "INFO");
+          if (complemento) {
+            criarNovaTarefa(chatId, complemento);
+          } else {
+            enviarMensagemTelegram(chatId, "❌ Por favor, forneça a descrição da tarefa. Ex: `/tarefa Reunião com a equipe amanhã às 10h`");
+          }
+          return;
+
+      case "/tarefas":
+      case "/agenda":
+          logToSheet(`Comando /tarefas ou /agenda detectado.`, "INFO");
+          listarTarefasPendentes(chatId);
+          return;
+
+      case "/concluir":
+          logToSheet(`Comando /concluir tarefa detectado. ID: "${complemento}"`, "INFO");
+          if (complemento) {
+            concluirTarefa(chatId, complemento);
+          } else {
+            enviarMensagemTelegram(chatId, "❌ Por favor, forneça o ID da tarefa que deseja concluir. Ex: `/concluir abc123`");
+          }
+          return;
+      
+      case "/excluir_tarefa":
+          logToSheet(`Comando /excluir_tarefa detectado. ID: "${complemento}"`, "INFO");
+           if (complemento) {
+            excluirTarefa(chatId, complemento);
+          } else {
+            enviarMensagemTelegram(chatId, "❌ Por favor, forneça o ID da tarefa que deseja excluir. Ex: `/excluir_tarefa abc123`");
+          }
+          return;
+      // --- FIM TAREFAS ---
 
       case "/adicionar_conta":
           logToSheet(`Comando /adicionar_conta detectado. Complemento: "${complemento}"`, "INFO");
@@ -460,6 +521,14 @@ function doPost(e) {
             enviarMensagemTelegram(chatId, "❌ Formato invalido para vincular. Use: `/vincular_conta <ID_CONTA_A_PAGAR> <ID_TRANSACAO>`");
           }
           return;
+
+      // --- NOVO CASE PARA O CHECK-UP FINANCEIRO ---
+      case "/saude":
+          logToSheet(`Comando /saude detectado.`, "INFO");
+          enviarSaudeFinanceira(chatId, usuario);
+          return;
+      // --- FIM DO NOVO CASE ---
+
       case "/ajuda":
           logToSheet(`Comando /ajuda detectado.`, "INFO");
           enviarAjuda(chatId);
@@ -536,6 +605,10 @@ function onOpen() {
         .addItem('⚙️ Configurações', 'showConfigurationSidebar')
         .addItem('Configuração do Bot (Telegram)', 'showSetupUI')
         .addSeparator()
+        // --- ADICIONE ESTA LINHA ---
+        .addItem('🔄 Atualizar Menu do Bot', 'setTelegramMenu')
+        // -------------------------
+        .addSeparator()
         .addItem('✅ Verificação do Sistema', 'runSystemDiagnostics')
         .addItem('📊 Atualizar Orçamento', 'updateBudgetSpentValues')
         .addSeparator()
@@ -551,7 +624,6 @@ function onOpen() {
       .addToUi();
   }
 }
-
 
 function showSetupUI() {
   const html = HtmlService.createHtmlOutputFromFile('SetupDialog.html')
