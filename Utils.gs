@@ -331,3 +331,13 @@ function findUserNameInText(text, userNames) {
   }
   return null;
 }
+
+/**
+ * Inclui o conteúdo de um arquivo HTML dentro de outro.
+ * Usado para carregar componentes reutilizáveis como CSS ou cabeçalhos.
+ * @param {string} filename O nome do arquivo HTML a ser incluído (sem a extensão .html).
+ * @return {string} O conteúdo do arquivo.
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
