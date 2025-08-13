@@ -10,6 +10,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <!-- NOVAS BIBLIOTECAS DO CALENDÁRIO -->
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/pt-br.js'></script>
     <style>
         /* Estilos CSS fornecidos pelo usuário */
         :root {
@@ -125,6 +129,7 @@
             font-size: 1rem;
             position: relative;
             overflow: hidden;
+            cursor: pointer; /* Adicionado para indicar que é clicável */
         }
 
         .sidebar-nav a::before {
@@ -1318,6 +1323,42 @@
             padding-top: 20px;
             border-top: 1px solid var(--border-color);
         }
+        
+        /* NOVO: Estilos para o Modal do Guia de Comandos */
+        #commandsGuideModal .modal-content {
+            max-width: 900px; /* Mais largo para o guia */
+        }
+        #commandsGuideModal .modal-body {
+            /* O conteúdo virá do HTML injetado, que já tem estilos */
+        }
+        
+        /* NOVO: Estilos para a Agenda */
+        #agenda-view {
+            display: none; /* Começa escondida */
+        }
+        #calendar {
+            --fc-bg-event-color: var(--accent-purple);
+            --fc-border-color: var(--border-color);
+            --fc-today-bg-color: rgba(59, 130, 246, 0.15);
+            --fc-button-bg-color: var(--bg-secondary);
+            --fc-button-active-bg-color: var(--accent-blue);
+            --fc-button-text-color: var(--text-primary);
+            --fc-button-hover-bg-color: var(--bg-card);
+            --fc-list-event-dot-width: 10px;
+            --fc-list-event-hover-bg-color: var(--bg-secondary);
+        }
+        .fc-toolbar-title {
+            color: var(--text-primary);
+        }
+        .fc-daygrid-day-number {
+            color: var(--text-secondary);
+        }
+        .fc-col-header-cell-cushion {
+            color: var(--text-secondary);
+        }
+        .fc-event-title {
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -1337,245 +1378,141 @@
                 <p>Menu</p>
             </div>
             <ul class="sidebar-nav">
-                <li><a href="#overview-section" class="active"><i class="fas fa-tachometer-alt"></i> <span>Visão Geral</span></a></li>
-                <li><a href="#account-balances-section"><i class="fas fa-university"></i> <span>Contas</span></a></li>
-                <li><a href="#credit-cards-section"><i class="fas fa-credit-card"></i> <span>Cartões</span></a></li>
-                <li><a href="#budget-progress-section"><i class="fas fa-chart-pie"></i> <span>Orçamento</span></a></li>
-                <li><a href="#goals-progress-section"><i class="fas fa-bullseye"></i> <span>Metas</span></a></li>
-                <li><a href="#expenses-chart-section"><i class="fas fa-chart-bar"></i> <span>Despesas</span></a></li>
-                <li><a href="#bills-to-pay-section"><i class="fas fa-file-invoice-dollar"></i> <span>Contas a Pagar</span></a></li>
-                <li><a href="#recent-transactions-section"><i class="fas fa-exchange-alt"></i> <span>Lançamentos Recentes</span></a></li>
+                <li><a id="show-dashboard-view" class="active"><i class="fas fa-tachometer-alt"></i> <span>Visão Geral</span></a></li>
+                <!-- NOVO: Link para a Agenda -->
+                <li><a id="show-agenda-view"><i class="fas fa-calendar-alt"></i> <span>Agenda</span></a></li>
+                <li><a id="open-commands-guide-btn"><i class="fas fa-book"></i> <span>Guia de Comandos</span></a></li>
             </ul>
         </nav>
 
         <!-- Main Content Area -->
         <div class="main-content-area" id="main-content">
             <div class="container">
-                <!-- Header -->
-                <div class="header" id="overview-section">
-                    <div class="header-left">
-                        <h1><i class="fas fa-chart-line"></i> Dashboard Financeiro</h1>
-                        <p>Controle inteligente das suas finanças pessoais</p>
-                    </div>
-                    <div class="header-right">
-                        <div class="filter-controls">
-                            <select id="month-select">
-                                <option value="0">Janeiro</option>
-                                <option value="1">Fevereiro</option>
-                                <option value="2">Março</option>
-                                <option value="3">Abril</option>
-                                <option value="4">Maio</option>
-                                <option value="5">Junho</option>
-                                <option value="6">Julho</option>
-                                <option value="7">Agosto</option>
-                                <option value="8">Setembro</option>
-                                <option value="9">Outubro</option>
-                                <option value="10">Novembro</option>
-                                <option value="11">Dezembro</option>
-                            </select>
-                            <input type="number" id="year-input" min="2020" max="2030">
-                            <button class="refresh-btn btn-primary" onclick="loadDashboardData()">
-                                <i class="fas fa-filter"></i>
-                                Aplicar Filtro
-                            </button>
+                
+                <!-- VISTA DO DASHBOARD FINANCEIRO (EXISTENTE) -->
+                <div id="dashboard-view">
+                    <!-- Header -->
+                    <div class="header">
+                        <div class="header-left">
+                            <h1><i class="fas fa-chart-line"></i> Dashboard Financeiro</h1>
+                            <p>Controle inteligente das suas finanças pessoais</p>
                         </div>
-                        <div class="last-update">
-                            <div>Última atualização</div>
-                            <div id="last-update-time">--</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Loading -->
-                <div class="loading" id="loading">
-                    <i class="fas fa-spinner"></i>
-                    <div>Carregando dados financeiros...</div>
-                </div>
-
-                <!-- Error Container -->
-                <div id="error-container"></div>
-
-                <!-- Dashboard Content -->
-                <div id="dashboard-content" style="display: none;">
-                    <!-- Summary Cards -->
-                    <div class="summary-grid">
-                        <div class="summary-card receitas">
-                            <div class="summary-header">
-                                <div class="summary-icon receitas">
-                                    <i class="fas fa-arrow-up"></i>
-                                </div>
-                                <div class="summary-trend trend-up">
-                                    <i class="fas fa-arrow-up"></i> --%
-                                </div>
+                        <div class="header-right">
+                            <div class="filter-controls">
+                                <select id="month-select">
+                                    <option value="0">Janeiro</option>
+                                    <option value="1">Fevereiro</option>
+                                    <option value="2">Março</option>
+                                    <option value="3">Abril</option>
+                                    <option value="4">Maio</option>
+                                    <option value="5">Junho</option>
+                                    <option value="6">Julho</option>
+                                    <option value="7">Agosto</option>
+                                    <option value="8">Setembro</option>
+                                    <option value="9">Outubro</option>
+                                    <option value="10">Novembro</option>
+                                    <option value="11">Dezembro</option>
+                                </select>
+                                <input type="number" id="year-input" min="2020" max="2030">
+                                <button class="refresh-btn btn-primary" onclick="loadDashboardData()">
+                                    <i class="fas fa-filter"></i>
+                                    Aplicar Filtro
+                                </button>
                             </div>
-                            <div class="summary-value" id="total-receitas">R$ 0,00</div>
-                            <div class="summary-label">Receitas do Mês</div>
-                        </div>
-
-                        <div class="summary-card despesas">
-                            <div class="summary-header">
-                                <div class="summary-icon despesas">
-                                    <i class="fas fa-arrow-down"></i>
-                                </div>
-                                <div class="summary-trend trend-down">
-                                    <i class="fas fa-arrow-down"></i> --%
-                                </div>
+                            <div class="last-update">
+                                <div>Última atualização</div>
+                                <div id="last-update-time">--</div>
                             </div>
-                            <div class="summary-value" id="total-despesas">R$ 0,00</div>
-                            <div class="summary-label">Despesas do Mês</div>
-                        </div>
-
-                        <div class="summary-card saldo">
-                            <div class="summary-header">
-                                <div class="summary-icon saldo">
-                                    <i class="fas fa-wallet"></i>
-                                </div>
-                                <div class="summary-trend trend-up">
-                                    <i class="fas fa-arrow-up"></i> --%
-                                </div>
-                            </div>
-                            <div class="summary-value" id="saldo-liquido">R$ 0,00</div>
-                            <div class="summary-label">Saldo Líquido</div>
                         </div>
                     </div>
 
-                    <!-- Main Grid -->
-                    <div class="main-grid">
-                        <!-- Left Column -->
-                        <div class="left-column">
-                            <!-- Account Balances (PRIORITY 1) -->
-                            <div class="card" id="account-balances-section">
-                                <div class="card-header">
-                                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));">
-                                        <i class="fas fa-university"></i>
+                    <!-- Loading -->
+                    <div class="loading" id="loading">
+                        <i class="fas fa-spinner"></i>
+                        <div>Carregando dados financeiros...</div>
+                    </div>
+
+                    <!-- Error Container -->
+                    <div id="error-container"></div>
+
+                    <!-- Dashboard Content -->
+                    <div id="dashboard-content" style="display: none;">
+                        <!-- Summary Cards -->
+                        <div class="summary-grid">
+                            <div class="summary-card receitas">
+                                <div class="summary-header">
+                                    <div class="summary-icon receitas">
+                                        <i class="fas fa-arrow-up"></i>
                                     </div>
-                                    <div class="card-title">Saldos das Contas</div>
-                                </div>
-                                <div class="card-content">
-                                    <div id="account-balances">
-                                        <div class="empty-state">
-                                            <i class="fas fa-coins"></i>
-                                            <div>Nenhuma conta encontrada</div>
-                                        </div>
+                                    <div class="summary-trend trend-up">
+                                        <i class="fas fa-arrow-up"></i> --%
                                     </div>
                                 </div>
+                                <div class="summary-value" id="total-receitas">R$ 0,00</div>
+                                <div class="summary-label">Receitas do Mês</div>
                             </div>
 
-                            <!-- Expenses Chart (PRIORITY 2) -->
-                            <div class="card" id="expenses-chart-section">
-                                <div class="card-header">
-                                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal));">
-                                        <i class="fas fa-chart-bar"></i>
+                            <div class="summary-card despesas">
+                                <div class="summary-header">
+                                    <div class="summary-icon despesas">
+                                        <i class="fas fa-arrow-down"></i>
                                     </div>
-                                    <div class="card-title">Despesas por Categoria (Clique para ver detalhes)</div>
-                                </div>
-                                <div class="card-content">
-                                    <div class="chart-container">
-                                        <canvas id="expenses-chart"></canvas>
-                                    </div>
-                                    <div id="expenses-chart-empty" class="empty-state" style="display: none;">
-                                        <i class="fas fa-chart-bar"></i>
-                                        <div>Nenhum dado de despesas para o gráfico.</div>
+                                    <div class="summary-trend trend-down">
+                                        <i class="fas fa-arrow-down"></i> --%
                                     </div>
                                 </div>
+                                <div class="summary-value" id="total-despesas">R$ 0,00</div>
+                                <div class="summary-label">Despesas do Mês</div>
                             </div>
 
-                            <!-- Goals Progress (PRIORITY 3) -->
-                            <div class="card" id="goals-progress-section">
-                                <div class="card-header">
-                                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-green), var(--accent-teal));">
-                                        <i class="fas fa-bullseye"></i>
+                            <div class="summary-card saldo">
+                                <div class="summary-header">
+                                    <div class="summary-icon saldo">
+                                        <i class="fas fa-wallet"></i>
                                     </div>
-                                    <div class="card-title">Progresso das Metas</div>
-                                </div>
-                                <div class="card-content">
-                                    <div id="goals-progress">
-                                        <div class="empty-state">
-                                            <i class="fas fa-target"></i>
-                                            <div>Nenhuma meta definida</div>
-                                        </div>
+                                    <div class="summary-trend trend-up">
+                                        <i class="fas fa-arrow-up"></i> --%
                                     </div>
                                 </div>
+                                <div class="summary-value" id="saldo-liquido">R$ 0,00</div>
+                                <div class="summary-label">Saldo Líquido</div>
                             </div>
                         </div>
 
-                        <!-- Right Column -->
-                        <div class="right-column">
-                            <!-- Recent Transactions (PRIORITY 4) -->
-                            <div class="card" id="recent-transactions-section">
-                                <div class="card-header">
-                                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-teal), var(--accent-green));">
-                                        <i class="fas fa-exchange-alt"></i>
-                                    </div>
-                                    <div class="card-title">Lançamentos Recentes</div>
-                                </div>
-                                <div class="card-content">
-                                    <div id="recent-transactions">
-                                        <div class="empty-state">
-                                            <i class="fas fa-history"></i>
-                                            <div>Nenhuma transação encontrada</div>
-                                        </div>
-                                    </div>
-                                </div>
+                        <!-- Main Grid -->
+                        <div class="main-grid">
+                            <!-- Left Column -->
+                            <div class="left-column">
+                                <div class="card" id="account-balances-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));"><i class="fas fa-university"></i></div><div class="card-title">Saldos das Contas</div></div><div class="card-content"><div id="account-balances"><div class="empty-state"><i class="fas fa-coins"></i><div>Nenhuma conta encontrada</div></div></div></div></div>
+                                <div class="card" id="expenses-chart-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal));"><i class="fas fa-chart-bar"></i></div><div class="card-title">Despesas por Categoria (Clique para ver detalhes)</div></div><div class="card-content"><div class="chart-container"><canvas id="expenses-chart"></canvas></div><div id="expenses-chart-empty" class="empty-state" style="display: none;"><i class="fas fa-chart-bar"></i><div>Nenhum dado de despesas para o gráfico.</div></div></div></div>
+                                <div class="card" id="goals-progress-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-green), var(--accent-teal));"><i class="fas fa-bullseye"></i></div><div class="card-title">Progresso das Metas</div></div><div class="card-content"><div id="goals-progress"><div class="empty-state"><i class="fas fa-target"></i><div>Nenhuma meta definida</div></div></div></div></div>
                             </div>
-
-                            <!-- Bills to Pay (PRIORITY 5) -->
-                            <div class="card" id="bills-to-pay-section">
-                                <div class="card-header">
-                                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-red), var(--accent-orange));">
-                                        <i class="fas fa-file-invoice-dollar"></i>
-                                    </div>
-                                    <div class="card-title">Contas a Pagar</div>
-                                </div>
-                                <div class="card-content">
-                                    <div id="bills-to-pay">
-                                        <div class="empty-state">
-                                            <i class="fas fa-calendar-check"></i>
-                                            <div>Nenhuma conta pendente</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Credit Cards (PRIORITY 6) -->
-                            <div class="card" id="credit-cards-section">
-                                <div class="card-header">
-                                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-orange), var(--accent-red));">
-                                        <i class="fas fa-credit-card"></i>
-                                    </div>
-                                    <div class="card-title">Cartões de Crédito</div>
-                                </div>
-                                <div class="card-content">
-                                    <div id="credit-cards">
-                                        <div class="empty-state">
-                                            <i class="fas fa-credit-card"></i>
-                                            <div>Nenhum cartão encontrado</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Budget Progress (PRIORITY 7) -->
-                            <div class="card" id="budget-progress-section">
-                                <div class="card-header">
-                                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));">
-                                        <i class="fas fa-chart-pie"></i>
-                                    </div>
-                                    <div class="card-title">Progresso do Orçamento</div>
-                                </div>
-                                <div class="card-content">
-                                    <div class="chart-container" id="budget-chart-container">
-                                        <canvas id="budget-chart"></canvas>
-                                    </div>
-                                    <div id="budget-chart-empty" class="empty-state" style="display: none;">
-                                        <i class="fas fa-calculator"></i>
-                                        <div>Nenhum orçamento definido para o gráfico.</div>
-                                    </div>
-                                </div>
+                            <!-- Right Column -->
+                            <div class="right-column">
+                                <div class="card" id="recent-transactions-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-teal), var(--accent-green));"><i class="fas fa-exchange-alt"></i></div><div class="card-title">Lançamentos Recentes</div></div><div class="card-content"><div id="recent-transactions"><div class="empty-state"><i class="fas fa-history"></i><div>Nenhuma transação encontrada</div></div></div></div></div>
+                                <div class="card" id="bills-to-pay-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-red), var(--accent-orange));"><i class="fas fa-file-invoice-dollar"></i></div><div class="card-title">Contas a Pagar</div></div><div class="card-content"><div id="bills-to-pay"><div class="empty-state"><i class="fas fa-calendar-check"></i><div>Nenhuma conta pendente</div></div></div></div></div>
+                                <div class="card" id="credit-cards-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-orange), var(--accent-red));"><i class="fas fa-credit-card"></i></div><div class="card-title">Cartões de Crédito</div></div><div class="card-content"><div id="credit-cards"><div class="empty-state"><i class="fas fa-credit-card"></i><div>Nenhum cartão encontrado</div></div></div></div></div>
+                                <div class="card" id="budget-progress-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));"><i class="fas fa-chart-pie"></i></div><div class="card-title">Progresso do Orçamento</div></div><div class="card-content"><div class="chart-container" id="budget-chart-container"><canvas id="budget-chart"></canvas></div><div id="budget-chart-empty" class="empty-state" style="display: none;"><i class="fas fa-calculator"></i><div>Nenhum orçamento definido para o gráfico.</div></div></div></div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- NOVA VISTA DA AGENDA -->
+                <div id="agenda-view" style="display: none;">
+                    <div class="header">
+                        <div class="header-left">
+                            <h1><i class="fas fa-calendar-alt"></i> Agenda de Tarefas</h1>
+                            <p>Visualize os seus compromissos e lembretes.</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-content" style="padding: 24px;">
+                            <div id="calendar"></div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -1691,6 +1628,19 @@
         </div>
     </div>
 
+    <!-- NOVO: Modal para o Guia de Comandos -->
+    <div id="commandsGuideModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="closeCommandsGuideBtn">&times;</span>
+            <div class="modal-body" id="commandsGuideContent">
+                <!-- O conteúdo do infográfico será injetado aqui -->
+                <div class="loading" style="height: 400px;">
+                    <i class="fas fa-spinner"></i>
+                    <div>A carregar guia...</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Feedback Message Container -->
     <div id="feedback-message" class="hidden">
@@ -1702,6 +1652,8 @@
         // Global variables for chart instances
         let expensesChartInstance = null;
         let budgetChartInstance = null;
+        // NOVO: Variável global para a instância do calendário
+        let calendarInstance = null;
 
         // Register the datalabels plugin globally
         Chart.register(ChartDataLabels);
@@ -2568,6 +2520,10 @@
             if (event.target == confirmDeleteModal) confirmDeleteModal.classList.remove('show');
             if (event.target == categoryDetailModal) categoryDetailModal.classList.remove('show');
             if (event.target == sidebarOverlay) toggleMenu(false);
+            // CORREÇÃO: Adicionado aqui
+            if (event.target == commandsGuideModal) {
+                commandsGuideModal.classList.remove('show');
+            }
         }
 
         function populateAccountsDropdown() {
@@ -2798,12 +2754,94 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            const navLinks = document.querySelectorAll('.sidebar-nav a');
-            navLinks.forEach(link => {
-                link.addEventListener('click', scrollToSection);
+            // ... (código existente) ...
+
+            // CORREÇÃO: Lógica para o Guia de Comandos
+            const openCommandsBtn = document.getElementById('open-commands-guide-btn');
+            const commandsModal = document.getElementById('commandsGuideModal');
+            const closeCommandsBtn = document.getElementById('closeCommandsGuideBtn');
+            const commandsContent = document.getElementById('commandsGuideContent');
+
+            openCommandsBtn.addEventListener('click', () => {
+                commandsModal.classList.add('show');
+                if (commandsContent.querySelector('.loading')) {
+                    google.script.run
+                        .withSuccessHandler(htmlContent => {
+                            commandsContent.innerHTML = htmlContent;
+                        })
+                        .withFailureHandler(error => {
+                            commandsContent.innerHTML = '<div class="error-message">Não foi possível carregar o guia de comandos.</div>';
+                            console.error("Erro ao carregar guia:", error);
+                        })
+                        .getCommandsGuideHtml();
+                }
             });
 
-            window.addEventListener('scroll', updateActiveNavLink);
+            closeCommandsBtn.onclick = () => {
+                commandsModal.classList.remove('show');
+            };
+            
+            // NOVO: Lógica para a Agenda
+            const dashboardView = document.getElementById('dashboard-view');
+            const agendaView = document.getElementById('agenda-view');
+            const showDashboardBtn = document.getElementById('show-dashboard-view');
+            const showAgendaBtn = document.getElementById('show-agenda-view');
+
+            function switchView(viewToShow) {
+                if (viewToShow === 'agenda') {
+                    dashboardView.style.display = 'none';
+                    agendaView.style.display = 'block';
+                    showDashboardBtn.classList.remove('active');
+                    showAgendaBtn.classList.add('active');
+                    initializeCalendar(); // Inicializa o calendário quando a vista é mostrada
+                } else {
+                    agendaView.style.display = 'none';
+                    dashboardView.style.display = 'block';
+                    showAgendaBtn.classList.remove('active');
+                    showDashboardBtn.classList.add('active');
+                }
+                toggleMenu(false); // Fecha o menu após a troca
+            }
+
+            showDashboardBtn.addEventListener('click', () => switchView('dashboard'));
+            showAgendaBtn.addEventListener('click', () => switchView('agenda'));
+
+            function initializeCalendar() {
+                if (calendarInstance) {
+                    return; // Já foi inicializado
+                }
+                const calendarEl = document.getElementById('calendar');
+                calendarInstance = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'pt-br',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridWeek,listWeek'
+                    },
+                    events: function(fetchInfo, successCallback, failureCallback) {
+                        google.script.run
+                            .withSuccessHandler(response => {
+                                if (response.success) {
+                                    successCallback(response.tasks);
+                                } else {
+                                    showFeedback('Erro ao buscar tarefas: ' + response.message, 'error');
+                                    failureCallback(new Error(response.message));
+                                }
+                            })
+                            .withFailureHandler(error => {
+                                showFeedback('Falha ao comunicar com o servidor da agenda.', 'error');
+                                failureCallback(error);
+                            })
+                            .getCalendarTasks();
+                    },
+                    eventDidMount: function(info) {
+                        // Adiciona um tooltip simples
+                        info.el.setAttribute('title', info.event.title);
+                    }
+                });
+                calendarInstance.render();
+            }
 
             const today = new Date();
             document.getElementById('month-select').value = today.getMonth();
