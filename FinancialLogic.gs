@@ -2,6 +2,7 @@
  * @file FinancialLogic.gs
  * @description Este arquivo contém a lógica de negócio central do bot financeiro.
  * Inclui interpretação de mensagens, cálculos financeiros, categorização e atualização de saldos.
+ * VERSÃO OTIMIZADA E CORRIGIDA.
  */
 
 // As constantes de estado do tutorial (TUTORIAL_STATE_WAITING_DESPESA, etc.) foram movidas para Management.gs
@@ -530,62 +531,44 @@ function extrairCategoriaSubcategoria(textoNormalizado, tipoTransacao, dadosPala
 
 
 /**
- * ATUALIZADO: Extrai a descrição final da transação, de forma mais inteligente.
- * Tenta identificar a descrição como o texto entre o valor e os detalhes de pagamento.
- * Se falhar, recorre a um método de limpeza de palavras-chave.
+ * **CORRIGIDO:** Extrai a descrição final da transação de forma mais robusta.
+ * Remove proativamente palavras-chave, valor e frases de parcelamento para isolar a descrição.
  * @param {string} textoNormalizado O texto normalizado da mensagem do usuário.
  * @param {string} valor O valor extraído (como string).
- * @param {Array<string>} keywordsToRemove As palavras-chave a serem removidas (usado como fallback).
+ * @param {Array<string>} keywordsToRemove As palavras-chave a serem removidas.
  * @returns {string} A descrição limpa.
  */
 function extrairDescricao(textoNormalizado, valor, keywordsToRemove) {
-  // --- MÉTODO 1: Extração por Padrão (mais preciso) ---
-  // Tenta capturar o texto entre o valor e uma preposição que indica pagamento.
-  const regexPadrao = new RegExp(`(?:${valor.replace('.', '[\\.,]')})\\s+(.*?)\\s+(?:com|no|na|em|de|da|do|pelo|pela|via)`);
-  const match = textoNormalizado.match(regexPadrao);
+  let descricao = ` ${textoNormalizado} `; // Adiciona espaços para facilitar a substituição de palavras inteiras
 
-  if (match && match[1]) {
-    const descricaoPotencial = match[1].trim();
-    // Remove palavras-chave de tipo de transação que possam ter sido capturadas
-    const tipoKeyword = keywordsToRemove[0] || ""; // "gastei", "paguei", etc.
-    const descricaoLimpa = descricaoPotencial.replace(new RegExp(`\\b${tipoKeyword}\\b`, 'gi'), '').trim();
-    
-    if (descricaoLimpa) {
-      logToSheet(`[extrairDescricao] Descrição extraída pelo método de padrão: "${descricaoLimpa}"`, "DEBUG");
-      return capitalize(descricaoLimpa);
-    }
-  }
+  // 1. Remove o valor
+  descricao = descricao.replace(` ${valor.replace('.', ',')} `, ' ');
+  descricao = descricao.replace(` ${valor.replace(',', '.')} `, ' ');
 
-  // --- MÉTODO 2: Fallback para Limpeza de Palavras-chave (método antigo, aprimorado) ---
-  logToSheet(`[extrairDescricao] Método de padrão falhou. Usando fallback de limpeza de keywords.`, "DEBUG");
-  let descricao = textoNormalizado;
+  // 2. Remove frases de parcelamento de forma mais segura
+  descricao = descricao.replace(/\s+em\s+\d+\s*x\s+/gi, " ");
+  descricao = descricao.replace(/\s+\d+\s*x\s+/gi, " ");
+  descricao = descricao.replace(/\s+\d+\s*vezes\s+/gi, " ");
 
-  // Remove o valor
-  descricao = descricao.replace(new RegExp(`\\b${valor.replace(/\./g, '\\.').replace(/,/g, '[\\.,]')}\\b`, 'gi'), '');
-
-  // Remove as palavras-chave de metadados (agora normalizadas para a comparação)
+  // 3. Remove outras palavras-chave (tipo, conta, método de pagamento)
   keywordsToRemove.forEach(keyword => {
     if (keyword) {
-      // Usa a palavra-chave normalizada para a busca no texto normalizado
-      descricao = descricao.replace(new RegExp(`\\b${normalizarTexto(keyword).replace(/ /g, '\\s+')}\\b`, "gi"), '');
+      const keywordNorm = normalizarTexto(keyword);
+      // Usa regex com \b para garantir que está removendo a palavra inteira
+      descricao = descricao.replace(new RegExp(`\\b${keywordNorm}\\b`, "gi"), '');
     }
   });
   
-  // Remove preposições comuns que podem sobrar
+  // 4. Limpa preposições comuns que podem sobrar
   const preposicoes = ['de', 'da', 'do', 'dos', 'das', 'e', 'ou', 'a', 'o', 'no', 'na', 'nos', 'nas', 'com', 'em', 'para', 'por', 'pelo', 'pela', 'via'];
   preposicoes.forEach(prep => {
-    descricao = descricao.replace(new RegExp(`\\b${prep}\\b`, 'gi'), "");
+    descricao = descricao.replace(new RegExp(`\\s+${prep}\\s+`, 'gi'), " ");
   });
 
-  // Remove termos comuns de parcelamento
-  descricao = descricao.replace(/\b(em\s+\d+\s*x)\b/gi, "");
-  descricao = descricao.replace(/\b(\d+\s*x)\b/gi, "");
-  descricao = descricao.replace(/\b((\d+)\s*(vezes|x))\b/gi, "");
-
-  // Limpa espaços extras
+  // 5. Limpa espaços extras e retorna
   descricao = descricao.replace(/\s+/g, " ").trim();
   
-  if (descricao.length < 3) {
+  if (descricao.length < 2) {
     return "Lançamento Geral";
   }
 
@@ -671,8 +654,9 @@ function prepararConfirmacaoParcelada(transacaoData, chatId) {
 }
 
 /**
- * ATUALIZADO: Registra a transação confirmada na planilha.
- * @param {Object} transacaoData Os dados da transação (pode ser um objeto único ou um array para transferências).
+ * **OTIMIZADO E CORRIGIDO:** Registra a transação confirmada na planilha usando batch operations.
+ * Garante a formatação correta da data de registro para todas as parcelas.
+ * @param {Object} transacaoData Os dados da transação.
  * @param {string} usuario O nome do usuário que confirmou.
  * @param {string} chatId O ID do chat do Telegram.
  */
@@ -690,23 +674,39 @@ function registrarTransacaoConfirmada(transacaoData, usuario, chatId) {
       return;
     }
     
-    // CORREÇÃO: Lógica para lidar com transferências
+    const rowsToAdd = [];
+    const timezone = ss.getSpreadsheetTimeZone();
+
     if (transacaoData.tipo === "Transferência") {
-        const saida = { ...transacaoData, tipo: "Despesa", conta: transacaoData.contaOrigem, descricao: `Transferência para ${transacaoData.contaDestino}`, categoria: "🔄 Transferências", subcategoria: "Entre Contas", metodoPagamento: "Transferência" };
-        const entrada = { ...transacaoData, tipo: "Receita", conta: transacaoData.contaDestino, descricao: `Transferência de ${transacaoData.contaOrigem}`, categoria: "🔄 Transferências", subcategoria: "Entre Contas", metodoPagamento: "Transferência" };
-        
-        registrarTransacaoNaPlanilha(new Date(saida.data), saida.descricao, saida.categoria, saida.subcategoria, saida.tipo, saida.valor, saida.metodoPagamento, saida.conta, 1, 1, new Date(saida.data), usuario, "Ativo", `${saida.finalId}-1`, new Date());
-        registrarTransacaoNaPlanilha(new Date(entrada.data), entrada.descricao, entrada.categoria, entrada.subcategoria, entrada.tipo, entrada.valor, entrada.metodoPagamento, entrada.conta, 1, 1, new Date(entrada.data), usuario, "Ativo", `${entrada.finalId}-2`, new Date());
+        const dataFormatada = `'${Utilities.formatDate(new Date(transacaoData.data), timezone, "dd/MM/yyyy")}`;
+        const dataRegistroFormatada = `'${Utilities.formatDate(new Date(), timezone, "dd/MM/yyyy HH:mm:ss")}`;
+
+        const saidaRow = [
+            dataFormatada, `Transferência para ${transacaoData.contaDestino}`, "🔄 Transferências", "Entre Contas", 
+            "Despesa", transacaoData.valor, "Transferência", transacaoData.contaOrigem, 1, 1, 
+            dataFormatada, usuario, "Ativo", `${transacaoData.finalId}-1`, dataRegistroFormatada
+        ];
+        rowsToAdd.push(saidaRow);
+
+        const entradaRow = [
+            dataFormatada, `Transferência de ${transacaoData.contaOrigem}`, "🔄 Transferências", "Entre Contas",
+            "Receita", transacaoData.valor, "Transferência", transacaoData.contaDestino, 1, 1,
+            dataFormatada, usuario, "Ativo", `${transacaoData.finalId}-2`, dataRegistroFormatada
+        ];
+        rowsToAdd.push(entradaRow);
 
         enviarMensagemTelegram(chatId, `✅ Transferência de *${formatCurrency(transacaoData.valor)}* registrada com sucesso!`);
     } else {
-        // Lógica existente para despesas e receitas
         const infoConta = obterInformacoesDaConta(transacaoData.conta, contasSheet.getDataRange().getValues()); 
         const valorParcela = transacaoData.valor / transacaoData.parcelasTotais;
         
         const dataVencimentoBase = new Date(transacaoData.dataVencimento);
         const dataTransacaoBase = new Date(transacaoData.data);
         const dataRegistroBase = new Date(transacaoData.dataRegistro);
+
+        // **CORREÇÃO BUG 2:** Formata as datas com apóstrofo UMA VEZ fora do loop.
+        const dataTransacaoFormatada = `'${Utilities.formatDate(dataTransacaoBase, timezone, "dd/MM/yyyy")}`;
+        const dataRegistroFormatada = `'${Utilities.formatDate(dataRegistroBase, timezone, "dd/MM/yyyy HH:mm:ss")}`;
 
         for (let i = 0; i < transacaoData.parcelasTotais; i++) {
           let dataVencimentoParcela = new Date(dataVencimentoBase);
@@ -721,18 +721,27 @@ function registrarTransacaoConfirmada(transacaoData, usuario, chatId) {
             dataVencimentoParcela = calcularVencimentoCartaoParaParcela(infoConta, dataVencimentoBase, i + 1, transacaoData.parcelasTotais, contasSheet.getDataRange().getValues());
           }
 
-          let idFinal = (transacaoData.parcelasTotais > 1) ? `${transacaoData.finalId}-${i + 1}` : transacaoData.finalId;
+          const dataVencimentoFormatada = `'${Utilities.formatDate(dataVencimentoParcela, timezone, "dd/MM/yyyy")}`;
+          const idFinal = (transacaoData.parcelasTotais > 1) ? `${transacaoData.finalId}-${i + 1}` : transacaoData.finalId;
 
-          registrarTransacaoNaPlanilha(dataTransacaoBase, transacaoData.descricao, transacaoData.categoria, transacaoData.subcategoria, transacaoData.tipo, valorParcela, transacaoData.metodoPagamento, transacaoData.conta, transacaoData.parcelasTotais, i + 1, dataVencimentoParcela, usuario, "Ativo", idFinal, dataRegistroBase);
+          const newRow = [
+            dataTransacaoFormatada, transacaoData.descricao, transacaoData.categoria, transacaoData.subcategoria,
+            transacaoData.tipo, valorParcela, transacaoData.metodoPagamento, transacaoData.conta,
+            transacaoData.parcelasTotais, i + 1, dataVencimentoFormatada, usuario, "Ativo", idFinal, dataRegistroFormatada
+          ];
+          rowsToAdd.push(newRow);
         }
         enviarMensagemTelegram(chatId, `✅ Lançamento de *${formatCurrency(transacaoData.valor)}* (${transacaoData.parcelasTotais}x) registrado com sucesso!`);
     }
     
+    if (rowsToAdd.length > 0) {
+        transacoesSheet.getRange(transacoesSheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+        logToSheet(`${rowsToAdd.length} linha(s) adicionada(s) à aba 'Transacoes' em uma única operação.`, "INFO");
+    }
+    
     logToSheet(`Transacao ${transacaoData.finalId} confirmada e registrada por ${usuario}.`, "INFO");
     atualizarSaldosDasContas();
-
-    // **NOVA LINHA ADICIONADA NO FINAL**
-    updateBudgetSpentValues(); // Atualiza o orçamento automaticamente
+    updateBudgetSpentValues();
 
   } catch (e) {
     logToSheet(`ERRO ao registrar transacao confirmada: ${e.message} na linha ${e.lineNumber}. Stack: ${e.stack}`, "ERROR");
@@ -741,6 +750,7 @@ function registrarTransacaoConfirmada(transacaoData, usuario, chatId) {
     lock.releaseLock();
   }
 }
+
 
 /**
  * Cancela uma transação pendente.
@@ -836,23 +846,17 @@ function calcularVencimentoCartaoParaParcela(infoConta, dataPrimeiraParcelaVenci
     dataVencimentoParcela.setMonth(dataVencimentoParcela.getMonth() + (numeroParcela - 1));
 
     // Ajuste para garantir que o dia do vencimento não "pule" para o mês seguinte
-    // se o dia do vencimento original for maior que o número de dias no mês atual
-    // (ex: 31 de janeiro -> 31 de março, mas fevereiro não tem dia 31).
     if (dataVencimentoParcela.getDate() !== dataPrimeiraParcelaVencimento.getDate()) {
         const lastDayOfMonth = new Date(dataVencimentoParcela.getFullYear(), dataVencimentoParcela.getMonth() + 1, 0).getDate();
-        dataVencimentoParcela.setDate(Math.min(dataVencimentoParcela.getDate(), lastDayOfMonth)); // Use o dia atual da parcela, não o dia original
+        dataVencimentoParcela.setDate(Math.min(dataVencimentoParcela.getDate(), lastDayOfMonth));
     }
     logToSheet(`[CalcVencimentoParcela] Calculado vencimento para parcela ${numeroParcela} de ${infoConta.nomeOriginal}: ${dataVencimentoParcela.toLocaleDateString()}`, "DEBUG");
     return dataVencimentoParcela;
 }
 
-// --- CORREÇÃO ---
-// Lógica de `atualizarSaldosDasContas` foi reestruturada para maior clareza e precisão,
-// especialmente no cálculo de faturas consolidadas.
 /**
  * ATUALIZADO: Atualiza os saldos de todas as contas na planilha 'Contas'
  * e os armazena na variável global `globalThis.saldosCalculados`.
- * Esta é uma função crucial para manter os dados do dashboard e dos comandos do bot atualizados.
  */
 function atualizarSaldosDasContas() {
   const lock = LockService.getScriptLock();
@@ -891,8 +895,8 @@ function atualizarSaldosDasContas() {
         diaFechamento: parseInt(linha[9]) || null,
         tipoFechamento: (linha[10] || "").toString().trim(),
         contaPaiAgrupador: normalizarTexto((linha[12] || "").toString().trim()),
-        faturaAtual: 0, // Gastos do ciclo que vence no próximo mês
-        saldoTotalPendente: 0 // Saldo devedor total
+        faturaAtual: 0, 
+        saldoTotalPendente: 0
       };
     }
     logToSheet("[AtualizarSaldos] Passo 1/4: Contas inicializadas.", "DEBUG");
@@ -988,8 +992,6 @@ function atualizarSaldosDasContas() {
 
 /**
  * NOVO: Gera as contas recorrentes para o próximo mês com base na aba 'Contas_a_Pagar'.
- * Evita duplicatas e ajusta o dia de vencimento se o dia original não existir no próximo mês.
- * Esta função é acionada por um gatilho de tempo ou manualmente.
  */
 function generateRecurringBillsForNextMonth() {
     logToSheet("Iniciando geracao de contas recorrentes para o proximo mes.", "INFO");
@@ -1028,9 +1030,8 @@ function generateRecurringBillsForNextMonth() {
     logToSheet(`Gerando contas recorrentes para: ${getNomeMes(nextMonthNum)}/${nextYearNum}`, "DEBUG");
 
     const newBills = [];
-    const existingBillsInNextMonth = new Set(); // Para evitar duplicatas
+    const existingBillsInNextMonth = new Set();
 
-    // Primeiro, verifica as contas já existentes para o próximo mês
     for (let i = 1; i < dadosContasAPagar.length; i++) {
         const row = dadosContasAPagar[i];
         const dataVencimentoExistente = parseData(row[colDataVencimento]);
@@ -1043,7 +1044,6 @@ function generateRecurringBillsForNextMonth() {
     logToSheet(`Contas existentes no proximo mes: ${existingBillsInNextMonth.size}`, "DEBUG");
 
 
-    // Processa contas do mês atual para gerar para o próximo
     for (let i = 1; i < dadosContasAPagar.length; i++) {
         const row = dadosContasAPagar[i];
         const recorrente = (row[colRecorrente] || "").toString().trim().toLowerCase();
@@ -1056,10 +1056,8 @@ function generateRecurringBillsForNextMonth() {
             const currentContaSugeria = (row[colContaSugeria] || "").toString().trim();
             const currentObservacoes = (row[colObservacoes] || "").toString().trim();
             
-            // Cria uma chave única para a conta baseada em seus atributos principais
             const billKey = normalizarTexto(currentDescricao + currentValor + currentCategoria);
 
-            // Verifica se a conta já existe para o próximo mês
             if (existingBillsInNextMonth.has(billKey)) {
                 logToSheet(`Conta recorrente "${currentDescricao}" ja existe para ${getNomeMes(nextMonthNum)}/${nextYearNum}. Pulando.`, "DEBUG");
                 continue;
@@ -1067,25 +1065,23 @@ function generateRecurringBillsForNextMonth() {
 
             if (currentDataVencimento) {
                 let newDueDate = new Date(currentDataVencimento);
-                newDueDate.setMonth(newDueDate.getMonth() + 1); // Avança um mês
+                newDueDate.setMonth(newDueDate.getMonth() + 1);
 
-                // Ajusta o dia para o último dia do mês se o dia original não existir no novo mês
-                // Ex: 31 de janeiro -> 28/29 de fevereiro
                 if (newDueDate.getDate() !== currentDataVencimento.getDate()) {
-                    newDueDate = new Date(newDueDate.getFullYear(), newDueDate.getMonth() + 1, 0); // Último dia do mês
+                    newDueDate = new Date(newDueDate.getFullYear(), newDueDate.getMonth() + 1, 0);
                 }
 
                 const newRow = [
-                    Utilities.getUuid(), // Novo ID único
+                    Utilities.getUuid(),
                     currentDescricao,
                     currentCategoria,
                     currentValor,
                     Utilities.formatDate(newDueDate, Session.getScriptTimeZone(), "dd/MM/yyyy"),
-                    "Pendente", // Status inicial
-                    "Verdadeiro", // Continua sendo recorrente
+                    "Pendente",
+                    "Verdadeiro",
                     currentContaSugeria,
                     currentObservacoes,
-                    "" // ID Transacao Vinculada (vazio)
+                    ""
                 ];
                 newBills.push(newRow);
                 logToSheet(`Conta recorrente "${currentDescricao}" gerada para ${getNomeMes(newDueDate.getMonth())}/${newDueDate.getFullYear()}.`, "INFO");
@@ -1103,10 +1099,8 @@ function generateRecurringBillsForNextMonth() {
 
 /**
  * NOVO: Processa o comando /marcar_pago vindo do Telegram.
- * Marca uma conta a pagar como "Pago" na planilha e tenta vincular a uma transação existente.
- * Se não encontrar uma transação, pergunta se o usuário deseja registrar uma agora.
  * @param {string} chatId O ID do chat do Telegram.
- * @param {string} textoRecebido O texto completo do comando (/marcar_pago_<ID_CONTA>).
+ * @param {string} textoRecebido O texto completo do comando.
  * @param {string} usuario O nome do usuário.
  */
 function processarMarcarPago(chatId, textoRecebido, usuario) {
@@ -1117,13 +1111,11 @@ function processarMarcarPago(chatId, textoRecebido, usuario) {
 
   if (!contaAPagarInfo) {
     enviarMensagemTelegram(chatId, `❌ Conta a Pagar com ID *${escapeMarkdown(idContaAPagar)}* não encontrada.`);
-    logToSheet(`Erro: Conta a Pagar ID ${idContaAPagar} não encontrada para marcar como pago.`, "WARN");
     return;
   }
 
   if (normalizarTexto(contaAPagarInfo.status) === "pago") {
     enviarMensagemTelegram(chatId, `ℹ️ A conta *${escapeMarkdown(contaAPagarInfo.descricao)}* já está paga.`);
-    logToSheet(`Conta a Pagar ID ${idContaAPagar} já está paga.`, "INFO");
     return;
   }
 
@@ -1131,7 +1123,6 @@ function processarMarcarPago(chatId, textoRecebido, usuario) {
   const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
   const dadosTransacoes = transacoesSheet.getDataRange().getValues();
 
-  // Tenta encontrar uma transação correspondente para vincular
   let transacaoVinculada = null;
   const hoje = new Date();
   const mesAtual = hoje.getMonth();
@@ -1144,14 +1135,11 @@ function processarMarcarPago(chatId, textoRecebido, usuario) {
     const valorTransacao = parseBrazilianFloat(String(linha[5]));
     const idTransacao = linha[13];
 
-    // Verifica se a transação é do mês atual, do tipo despesa,
-    // e se a descrição e o valor são semelhantes
     if (dataTransacao && dataTransacao.getMonth() === mesAtual && dataTransacao.getFullYear() === anoAtual &&
         normalizarTexto(linha[4]) === "despesa" &&
         calculateSimilarity(descricaoTransacao, normalizarTexto(contaAPagarInfo.descricao)) > SIMILARITY_THRESHOLD &&
-        Math.abs(valorTransacao - contaAPagarInfo.valor) < 0.01) { // Margem de erro para o valor
+        Math.abs(valorTransacao - contaAPagarInfo.valor) < 0.01) {
         transacaoVinculada = idTransacao;
-        logToSheet(`[MarcarPago] Transacao existente (ID: ${idTransacao}) encontrada para vincular a conta ${idContaAPagar}.`, "INFO");
         break;
     }
   }
@@ -1159,7 +1147,6 @@ function processarMarcarPago(chatId, textoRecebido, usuario) {
   if (transacaoVinculada) {
     vincularTransacaoAContaAPagar(chatId, idContaAPagar, transacaoVinculada);
   } else {
-    // Se não encontrou transação existente, pergunta se quer registrar uma agora
     const mensagem = `A conta *${escapeMarkdown(contaAPagarInfo.descricao)}* (R$ ${contaAPagarInfo.valor.toFixed(2).replace('.', ',')}) será marcada como paga.`;
     const teclado = {
       inline_keyboard: [
@@ -1169,16 +1156,14 @@ function processarMarcarPago(chatId, textoRecebido, usuario) {
       ]
     };
     enviarMensagemTelegram(chatId, mensagem, { reply_markup: teclado });
-    logToSheet(`[MarcarPago] Nenhuma transacao existente encontrada para ${idContaAPagar}. Solicitando acao do usuario.`, "INFO");
   }
 }
 
 /**
  * NOVO: Função para lidar com a confirmação de marcar conta a pagar.
- * Esta função é chamada a partir de um callback_query.
- * @param {string} chatId O ID do chat do Telegram.
- * @param {string} action O tipo de ação (sem_transacao ou e_registrar).
- * @param {string} idContaAPagar O ID da conta a pagar.
+ * @param {string} chatId O ID do chat.
+ * @param {string} action A ação a ser tomada.
+ * @param {string} idContaAPagar O ID da conta.
  * @param {string} usuario O nome do usuário.
  */
 function handleMarcarPagoConfirmation(chatId, action, idContaAPagar, usuario) {
@@ -1188,13 +1173,11 @@ function handleMarcarPagoConfirmation(chatId, action, idContaAPagar, usuario) {
 
   if (!contaAPagarInfo) {
     enviarMensagemTelegram(chatId, `❌ Conta a Pagar com ID *${escapeMarkdown(idContaAPagar)}* não encontrada.`);
-    logToSheet(`Erro: Conta a Pagar ID ${idContaAPagar} não encontrada para confirmação de marcar como pago.`, "WARN");
     return;
   }
 
   if (normalizarTexto(contaAPagarInfo.status) === "pago") {
     enviarMensagemTelegram(chatId, `ℹ️ A conta *${escapeMarkdown(contaAPagarInfo.descricao)}* já está paga.`);
-    logToSheet(`Conta a Pagar ID ${idContaAPagar} já está paga.`, "INFO");
     return;
   }
 
@@ -1206,27 +1189,24 @@ function handleMarcarPagoConfirmation(chatId, action, idContaAPagar, usuario) {
   if (action === "sem_transacao") {
     try {
       contasAPagarSheet.getRange(contaAPagarInfo.linha, colStatus).setValue("Pago");
-      contasAPagarSheet.getRange(contaAPagarInfo.linha, colIDTransacaoVinculada).setValue("MARCADO_MANUALMENTE"); // Indica que foi pago manualmente
+      contasAPagarSheet.getRange(contaAPagarInfo.linha, colIDTransacaoVinculada).setValue("MARCADO_MANUALMENTE");
       enviarMensagemTelegram(chatId, `✅ Conta *${escapeMarkdown(contaAPagarInfo.descricao)}* marcada como paga (sem registro de transação).`);
-      logToSheet(`Conta a Pagar ${idContaAPagar} marcada como paga manualmente.`, "INFO");
       atualizarSaldosDasContas();
     } catch (e) {
-      logToSheet(`ERRO ao marcar conta a pagar ${idContaAPagar} sem transacao: ${e.message}`, "ERROR");
       enviarMensagemTelegram(chatId, `❌ Erro ao marcar conta como paga: ${e.message}`);
     }
   } else if (action === "e_registrar") {
     try {
-      // Cria uma transação com os dados da conta a pagar
       const transacaoData = {
         id: Utilities.getUuid(),
         data: new Date(),
         descricao: `Pagamento de ${contaAPagarInfo.descricao}`,
         categoria: contaAPagarInfo.categoria,
-        subcategoria: "Pagamento de Fatura" || "", // Se não houver, padrão para Pagamento de Fatura
+        subcategoria: "Pagamento de Fatura" || "",
         tipo: "Despesa",
         valor: contaAPagarInfo.valor,
-        metodoPagamento: contaAPagarInfo.contaDePagamentoSugeria || "Débito", // Usa conta sugerida ou padrão
-        conta: contaAPagarInfo.contaDePagamentoSugeria || "Não Identificada", // Usa conta sugerida ou padrão
+        metodoPagamento: contaAPagarInfo.contaDePagamentoSugeria || "Débito",
+        conta: contaAPagarInfo.contaDePagamentoSugeria || "Não Identificada",
         parcelasTotais: 1,
         parcelaAtual: 1,
         dataVencimento: contaAPagarInfo.dataVencimento,
@@ -1235,16 +1215,13 @@ function handleMarcarPagoConfirmation(chatId, action, idContaAPagar, usuario) {
         dataRegistro: new Date()
       };
       
-      registrarTransacaoConfirmada(transacaoData, usuario, chatId); // Registra a transação
+      registrarTransacaoConfirmada(transacaoData, usuario, chatId);
       
-      // Vincula a nova transação à conta a pagar
       contasAPagarSheet.getRange(contaAPagarInfo.linha, colStatus).setValue("Pago");
       contasAPagarSheet.getRange(contaAPagarInfo.linha, colIDTransacaoVinculada).setValue(transacaoData.id);
-      logToSheet(`Conta a Pagar ${idContaAPagar} marcada como paga e vinculada a nova transacao ${transacaoData.id}.`, "INFO");
       enviarMensagemTelegram(chatId, `✅ Transação de *${formatCurrency(transacaoData.valor)}* para *${escapeMarkdown(contaAPagarInfo.descricao)}* registrada e conta marcada como paga!`);
       atualizarSaldosDasContas();
     } catch (e) {
-      logToSheet(`ERRO ao registrar e marcar conta a pagar ${idContaAPagar}: ${e.message}`, "ERROR");
       enviarMensagemTelegram(chatId, `❌ Erro ao registrar e marcar conta como paga: ${e.message}`);
     }
   }
@@ -1252,10 +1229,10 @@ function handleMarcarPagoConfirmation(chatId, action, idContaAPagar, usuario) {
 
 /**
  * NOVO: Extrai as contas de origem e destino de uma mensagem de transferência.
- * @param {string} textoNormalizado O texto da mensagem normalizado.
- * @param {Array<Array<any>>} dadosContas Os dados da aba 'Contas'.
- * @param {Array<Array<any>>} dadosPalavras Os dados da aba 'PalavrasChave'.
- * @returns {Object} Um objeto com { contaOrigem, contaDestino }.
+ * @param {string} textoNormalizado O texto normalizado.
+ * @param {Array<Array<any>>} dadosContas Os dados das contas.
+ * @param {Array<Array<any>>} dadosPalavras Os dados das palavras-chave.
+ * @returns {Object} Um objeto com as contas de origem e destino.
  */
 function extrairContasTransferencia(textoNormalizado, dadosContas, dadosPalavras) {
     let contaOrigem = "Não Identificada";
@@ -1280,14 +1257,14 @@ function extrairContasTransferencia(textoNormalizado, dadosContas, dadosPalavras
 
 /**
  * NOVO: Prepara e envia uma mensagem de confirmação para transferências.
- * @param {Object} transacaoData O objeto parcial da transferência.
+ * @param {Object} transacaoData Os dados da transferência.
  * @param {string} chatId O ID do chat.
- * @returns {Object} Status de confirmação pendente.
+ * @returns {Object} O status de confirmação pendente.
  */
 function prepararConfirmacaoTransferencia(transacaoData, chatId) {
     const transactionId = Utilities.getUuid();
     transacaoData.finalId = transactionId;
-    transacaoData.data = new Date(); // Garante que a data está definida
+    transacaoData.data = new Date();
 
     const cache = CacheService.getScriptCache();
     const cacheKey = `${CACHE_KEY_PENDING_TRANSACTIONS}_${chatId}_${transactionId}`;
