@@ -2,6 +2,7 @@
  * @file Commands.gs
  * @description Este arquivo contém as implementações de todos os comandos do bot do Telegram.
  * Cada função aqui corresponde a um comando específico (/resumo, /saldo, etc.).
+ * VERSÃO COM A FUNÇÃO enviarSaldo REFATORADA.
  */
 
 // Variável global para armazenar os saldos calculados.
@@ -221,157 +222,189 @@ function enviarResumo(chatId, usuario, mes, ano) {
 }
 
 
+// ===================================================================================
+// SEÇÃO DE SALDO - REFATORADA
+// ===================================================================================
+
 /**
- * ATUALIZADA: Envia o saldo atual das contas e faturas de cartão de crédito.
- * A lógica agora confia nos valores pré-calculados e consolidados por `atualizarSaldosDasContas`.
+ * @private
+ * Formata uma seção da mensagem de saldo, lidando com grupos e filhos.
+ * @param {string} titulo O título da seção.
+ * @param {Object} dadosAgrupados Os dados calculados e agrupados.
+ * @param {string} mensagemSemDados A mensagem a ser exibida se não houver dados.
+ * @returns {string} A string formatada para a seção.
+ */
+function _formatarSecaoMensagem(titulo, dadosAgrupados, mensagemSemDados) {
+  let secaoTexto = `\n*${titulo}*\n`;
+  if (Object.keys(dadosAgrupados).length === 0) {
+    secaoTexto += `_${mensagemSemDados}_\n`;
+    return secaoTexto;
+  }
+
+  Object.keys(dadosAgrupados).forEach(pai => {
+    const grupo = dadosAgrupados[pai];
+    secaoTexto += `• *${escapeMarkdown(capitalize(pai))}: ${formatCurrency(grupo.total)}*\n`;
+    if (grupo.filhos.length > 1) {
+      grupo.filhos.forEach(filho => {
+        secaoTexto += `  - _${escapeMarkdown(filho.nome.split(' ').pop())}: ${formatCurrency(filho.valor)}_\n`;
+      });
+    }
+  });
+  return secaoTexto;
+}
+
+/**
+ * @private
+ * Calcula e agrupa os saldos das contas correntes e dinheiro.
+ * @param {Object} saldosCalculados O objeto global com os saldos pré-calculados.
+ * @returns {{total: number, contas: Array<Object>}} Objeto com o total e a lista de contas.
+ */
+function _calcularSaldosContasCorrentes(saldosCalculados) {
+  let total = 0;
+  const contas = [];
+  for (const nomeNormalizado in saldosCalculados) {
+    const infoConta = saldosCalculados[nomeNormalizado];
+    if (infoConta.tipo === "conta corrente" || infoConta.tipo === "dinheiro físico") {
+      total += infoConta.saldo;
+      contas.push(infoConta);
+    }
+  }
+  return { total, contas };
+}
+
+/**
+ * @private
+ * Calcula e agrupa as faturas com vencimento no próximo ciclo.
+ * @param {Object} saldosCalculados O objeto global com os saldos pré-calculados.
+ * @returns {Object} Um objeto com os dados das faturas agrupados por conta pai.
+ */
+function _calcularFaturasProximoMes(saldosCalculados) {
+  const agrupadores = {};
+  for (const nomeNormalizado in saldosCalculados) {
+    const infoConta = saldosCalculados[nomeNormalizado];
+    if (infoConta.tipo === "cartão de crédito" && infoConta.faturaAtual > 0) {
+      const pai = infoConta.contaPaiAgrupador || infoConta.nomeNormalizado;
+      if (!agrupadores[pai]) {
+        agrupadores[pai] = { total: 0, filhos: [] };
+      }
+      agrupadores[pai].total += infoConta.faturaAtual;
+      agrupadores[pai].filhos.push({ nome: infoConta.nomeOriginal, valor: infoConta.faturaAtual });
+    }
+  }
+  return agrupadores;
+}
+
+/**
+ * @private
+ * Calcula e agrupa as faturas com vencimento no mês atual.
+ * @param {Array<Array<any>>} dadosTransacoes Dados da aba 'Transacoes'.
+ * @param {Array<Array<any>>} dadosContas Dados da aba 'Contas'.
+ * @param {number} mes O mês atual (0-11).
+ * @param {number} ano O ano atual.
+ * @returns {Object} Um objeto com os dados das faturas do mês atual agrupados.
+ */
+function _calcularFaturasMesAtual(dadosTransacoes, dadosContas, mes, ano) {
+  const faturasDoMes = {};
+  for (let i = 1; i < dadosTransacoes.length; i++) {
+    const linha = dadosTransacoes[i];
+    const dataVencimento = parseData(linha[10]);
+    if (dataVencimento && dataVencimento.getMonth() === mes && dataVencimento.getFullYear() === ano) {
+      const conta = linha[7];
+      const infoConta = obterInformacoesDaConta(conta, dadosContas);
+      if (infoConta && normalizarTexto(infoConta.tipo) === "cartao de credito") {
+        const pai = infoConta.contaPaiAgrupador || infoConta.nomeNormalizado;
+        const valor = parseBrazilianFloat(String(linha[5]));
+        if (!faturasDoMes[pai]) {
+          faturasDoMes[pai] = { total: 0, filhos: {} };
+        }
+        faturasDoMes[pai].total += valor;
+        faturasDoMes[pai].filhos[infoConta.nomeOriginal] = (faturasDoMes[pai].filhos[infoConta.nomeOriginal] || 0) + valor;
+      }
+    }
+  }
+  // Formata a saída para ser compatível com _formatarSecaoMensagem
+  const resultadoFormatado = {};
+  for(const pai in faturasDoMes) {
+    resultadoFormatado[pai] = {
+      total: faturasDoMes[pai].total,
+      filhos: Object.entries(faturasDoMes[pai].filhos).map(([nome, valor]) => ({nome, valor}))
+    };
+  }
+  return resultadoFormatado;
+}
+
+/**
+ * @private
+ * Calcula e agrupa a dívida total pendente em todos os cartões.
+ * @param {Object} saldosCalculados O objeto global com os saldos pré-calculados.
+ * @returns {{total: number, devedores: Object}} Objeto com o total e os dados agrupados.
+ */
+function _calcularDividaTotalCartoes(saldosCalculados) {
+  const devedores = {};
+  let total = 0;
+  for (const nomeNormalizado in saldosCalculados) {
+    const infoConta = saldosCalculados[nomeNormalizado];
+    if (infoConta.tipo === "cartão de crédito" && infoConta.saldoTotalPendente > 0.01) {
+      const pai = infoConta.contaPaiAgrupador || infoConta.nomeNormalizado;
+      if (!devedores[pai]) {
+        devedores[pai] = { total: 0, filhos: [] };
+      }
+      devedores[pai].total += infoConta.saldoTotalPendente;
+      devedores[pai].filhos.push({ nome: infoConta.nomeOriginal, valor: infoConta.saldoTotalPendente });
+      total += infoConta.saldoTotalPendente;
+    }
+  }
+  return { total, devedores };
+}
+
+/**
+ * **REFATORADO:** Envia o saldo atual das contas e faturas de cartão de crédito.
+ * A lógica de cálculo foi movida para funções auxiliares para maior clareza.
  * @param {string} chatId O ID do chat do Telegram.
  * @param {string} usuario O nome do usuário solicitante.
  */
 function enviarSaldo(chatId, usuario) {
   logToSheet(`Iniciando enviarSaldo para chatId: ${chatId}, usuario: ${usuario}`, "INFO");
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const configData = getSheetDataWithCache(SHEET_CONFIGURACOES, CACHE_KEY_CONFIG);
-  const transacoesData = getSheetDataWithCache(SHEET_TRANSACOES, 'transacoes_cache');
-  const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
-  const grupoUsuarioChat = getGrupoPorChatId(chatId, configData);
-
-  atualizarSaldosDasContas(); 
-  logToSheet(`[enviarSaldo] Saldos atualizados. Iniciando construção da mensagem.`, "DEBUG");
-
-  let mensagemSaldo = `💰 *Saldos Atuais - ${escapeMarkdown(grupoUsuarioChat || 'Pessoal')}*\n`;
-  let totalContasCorrentes = 0;
-  
   try {
-    // --- 1. Exibir Saldos de Contas Correntes e Dinheiro ---
+    // 1. Carregar Dados
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const configData = getSheetDataWithCache(SHEET_CONFIGURACOES, CACHE_KEY_CONFIG);
+    const transacoesData = getSheetDataWithCache(SHEET_TRANSACOES, 'transacoes_cache');
+    const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
+    const grupoUsuarioChat = getGrupoPorChatId(chatId, configData);
+    const today = new Date();
+
+    // 2. Garantir que os saldos globais estão atualizados
+    atualizarSaldosDasContas(); 
+    logToSheet(`[enviarSaldo] Saldos globais atualizados.`, "DEBUG");
+
+    // 3. Chamar funções de cálculo especializadas
+    const { total: totalContasCorrentes, contas: contasCorrentes } = _calcularSaldosContasCorrentes(globalThis.saldosCalculados);
+    const faturasProximoMes = _calcularFaturasProximoMes(globalThis.saldosCalculados);
+    const faturasMesAtual = _calcularFaturasMesAtual(transacoesData, dadosContas, today.getMonth(), today.getFullYear());
+    const { total: totalDividaCartoes, devedores: devedoresCartoes } = _calcularDividaTotalCartoes(globalThis.saldosCalculados);
+
+    // 4. Montar a Mensagem
+    let mensagemSaldo = `💰 *Saldos Atuais - ${escapeMarkdown(grupoUsuarioChat || 'Pessoal')}*\n`;
+    
+    // Seção Contas Correntes
     mensagemSaldo += `──────────────\n*💵 Contas e Dinheiro*\n`;
-    const contasCorrentes = [];
-    for (const nomeNormalizado in globalThis.saldosCalculados) {
-      const infoConta = globalThis.saldosCalculados[nomeNormalizado];
-      if (infoConta.tipo === "conta corrente" || infoConta.tipo === "dinheiro físico") {
-        totalContasCorrentes += infoConta.saldo;
-        contasCorrentes.push(infoConta);
-      }
-    }
     contasCorrentes.sort((a, b) => a.nomeOriginal.localeCompare(b.nomeOriginal)).forEach(conta => {
         mensagemSaldo += `• ${escapeMarkdown(capitalize(conta.nomeOriginal))}: *${formatCurrency(conta.saldo)}*\n`;
     });
 
-    // --- ESTRUTURA PARA AGRUPAR CARTÕES ---
-    const agrupadores = {};
+    // Seções de Faturas e Dívidas
+    mensagemSaldo += _formatarSecaoMensagem("🗓️ Faturas (Próximo Vencimento)", faturasProximoMes, "Nenhuma fatura para o próximo ciclo.");
+    mensagemSaldo += _formatarSecaoMensagem(`🧾 Faturas a Vencer em ${getNomeMes(today.getMonth())}`, faturasMesAtual, "Nenhuma fatura de cartão a vencer neste mês.");
+    mensagemSaldo += _formatarSecaoMensagem("💳 Dívida Total dos Cartões", devedoresCartoes, "Nenhum saldo devedor encontrado.");
 
-    // --- 2. Processar e Agrupar Faturas do Próximo Mês ---
-    for (const nomeNormalizado in globalThis.saldosCalculados) {
-      const infoConta = globalThis.saldosCalculados[nomeNormalizado];
-      if (infoConta.tipo === "cartão de crédito" && infoConta.faturaAtual > 0) {
-        const pai = infoConta.contaPaiAgrupador || infoConta.nomeNormalizado;
-        if (!agrupadores[pai]) {
-          agrupadores[pai] = { faturaProximoMes: 0, filhos: [] };
-        }
-        agrupadores[pai].faturaProximoMes += infoConta.faturaAtual;
-        agrupadores[pai].filhos.push({ nome: infoConta.nomeOriginal, faturaProximoMes: infoConta.faturaAtual });
-      }
-    }
-
-    mensagemSaldo += `\n*🗓️ Faturas (Próximo Vencimento)*\n`;
-    let temFaturaProximoMes = false;
-    Object.keys(agrupadores).forEach(pai => {
-        const grupo = agrupadores[pai];
-        if (grupo.faturaProximoMes > 0) {
-            temFaturaProximoMes = true;
-            mensagemSaldo += `• *${escapeMarkdown(capitalize(pai))}: ${formatCurrency(grupo.faturaProximoMes)}*\n`;
-            if (grupo.filhos.length > 1) {
-                grupo.filhos.forEach(filho => {
-                    mensagemSaldo += `  - _${escapeMarkdown(filho.nome.split(' ').pop())}: ${formatCurrency(filho.faturaProximoMes)}_\n`;
-                });
-            }
-        }
-    });
-    if (!temFaturaProximoMes) {
-      mensagemSaldo += "_Nenhuma fatura para o próximo ciclo._\n";
-    }
-
-    // --- 3. Exibir Faturas a Vencer no Mês Atual (APENAS CARTÕES) ---
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    mensagemSaldo += `\n*🧾 Faturas a Vencer em ${getNomeMes(currentMonth)}*\n`;
-    
-    const faturasDoMesAtual = {};
-    for (let i = 1; i < transacoesData.length; i++) {
-        const linha = transacoesData[i];
-        const dataVencimento = parseData(linha[10]);
-        if (dataVencimento && dataVencimento.getMonth() === currentMonth && dataVencimento.getFullYear() === currentYear) {
-            const conta = linha[7];
-            const infoConta = obterInformacoesDaConta(conta, dadosContas);
-            if (infoConta && normalizarTexto(infoConta.tipo) === "cartao de credito") {
-                const pai = infoConta.contaPaiAgrupador || infoConta.nomeNormalizado;
-                const valor = parseBrazilianFloat(String(linha[5]));
-                if (!faturasDoMesAtual[pai]) {
-                    faturasDoMesAtual[pai] = { total: 0, filhos: {} };
-                }
-                faturasDoMesAtual[pai].total += valor;
-                faturasDoMesAtual[pai].filhos[infoConta.nomeOriginal] = (faturasDoMesAtual[pai].filhos[infoConta.nomeOriginal] || 0) + valor;
-            }
-        }
-    }
-
-    let temFaturaEsteMes = false;
-    Object.keys(faturasDoMesAtual).forEach(pai => {
-        const fatura = faturasDoMesAtual[pai];
-        if (fatura.total > 0) {
-            temFaturaEsteMes = true;
-            mensagemSaldo += `• *${escapeMarkdown(capitalize(pai))}: ${formatCurrency(fatura.total)}*\n`;
-            if (Object.keys(fatura.filhos).length > 1) {
-                Object.keys(fatura.filhos).forEach(filho => {
-                    mensagemSaldo += `  - _${escapeMarkdown(filho.split(' ').pop())}: ${formatCurrency(fatura.filhos[filho])}_\n`;
-                });
-            }
-        }
-    });
-
-    if (!temFaturaEsteMes) {
-        mensagemSaldo += "_Nenhuma fatura de cartão a vencer neste mês._\n";
-    }
-
-    // --- 4. Exibir Saldo Devedor Total (Consolidado) ---
-    mensagemSaldo += `\n*💳 Dívida Total dos Cartões*\n`;
-    let totalFaturasPagar = 0;
-    const devedores = {};
-    for (const nomeNormalizado in globalThis.saldosCalculados) {
-      const infoConta = globalThis.saldosCalculados[nomeNormalizado];
-      if (infoConta.tipo === "cartão de crédito" && infoConta.saldoTotalPendente > 0.01) {
-        const pai = infoConta.contaPaiAgrupador || infoConta.nomeNormalizado;
-        if (!devedores[pai]) {
-          devedores[pai] = { total: 0, filhos: [] };
-        }
-        devedores[pai].total += infoConta.saldoTotalPendente;
-        devedores[pai].filhos.push({ nome: infoConta.nomeOriginal, valor: infoConta.saldoTotalPendente });
-        totalFaturasPagar += infoConta.saldoTotalPendente;
-      }
-    }
-    
-    let temSaldoDevedor = false;
-    Object.keys(devedores).forEach(pai => {
-        temSaldoDevedor = true;
-        const grupo = devedores[pai];
-        mensagemSaldo += `• *${escapeMarkdown(capitalize(pai))}: ${formatCurrency(grupo.total)}*\n`;
-        if (grupo.filhos.length > 1) {
-            grupo.filhos.forEach(filho => {
-                mensagemSaldo += `  - _${escapeMarkdown(filho.nome.split(' ').pop())}: ${formatCurrency(filho.valor)}_\n`;
-            });
-        }
-    });
-
-    if (!temSaldoDevedor) {
-      mensagemSaldo += "_Nenhum saldo devedor encontrado._\n";
-    }
-
-    // --- 5. Totais Gerais ---
+    // Seção de Resumo Geral
     mensagemSaldo += `──────────────\n*🏦 Resumo Geral*\n`;
     mensagemSaldo += `*Total Disponível:* ${formatCurrency(totalContasCorrentes)}\n`;
-    mensagemSaldo += `*Saldo Líquido (Disponível - Dívida):* ${formatCurrency(totalContasCorrentes - totalFaturasPagar)}\n`;
+    mensagemSaldo += `*Saldo Líquido (Disponível - Dívida):* ${formatCurrency(totalContasCorrentes - totalDividaCartoes)}\n`;
 
+    // 5. Enviar Mensagem
     enviarMensagemTelegram(chatId, mensagemSaldo);
     logToSheet(`Saldo enviado para chatId: ${chatId}.`, "INFO");
 
@@ -380,6 +413,10 @@ function enviarSaldo(chatId, usuario) {
     enviarMensagemTelegram(chatId, "❌ Houve um erro inesperado ao gerar seu saldo. Por favor, tente novamente mais tarde.");
   }
 }
+
+// ===================================================================================
+// FIM DA SEÇÃO DE SALDO
+// ===================================================================================
 
 
 /**
@@ -2209,7 +2246,7 @@ function enviarSaudeFinanceira(chatId, usuario) {
   mensagem += `● *Taxa de Poupança:* ${emojiPoupanca} ${taxaDePoupanca.toFixed(0)}%\n_${escapeMarkdown(textoPoupanca)}_\n\n`;
 
   // Rendimento Comprometido
-  let emojiComprometido = "?";
+  let emojiComprometido = "🟢";
   let textoComprometido = `${percRendimentoComprometido.toFixed(0)}% do seu rendimento está alocado a faturas e contas a pagar.`;
   if (percRendimentoComprometido > 50) {
     emojiComprometido = "🔴";
@@ -2222,5 +2259,5 @@ function enviarSaudeFinanceira(chatId, usuario) {
   // Gasto Diário Médio
   mensagem += `● *Gasto Diário Médio:* 💸 ${formatCurrency(gastoDiarioMedio)}\n_Até agora, este é o seu gasto médio por dia neste mês._`;
 
-  enviarMensagemTelegram(chatId, mensagem);
+  enviarMensagemTelegram(chatId, mensagem)
 }
