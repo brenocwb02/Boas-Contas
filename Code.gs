@@ -577,10 +577,7 @@ function doPost(e) {
 }
 
 /**
- * **FUNÇÃO ATUALIZADA E CORRIGIDA**
  * Cria o menu personalizado quando a planilha é aberta.
- * Esta versão usa um bloco try...catch para garantir que o menu de ativação
- * apareça sempre para novos utilizadores, mesmo antes de o script ser autorizado.
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
@@ -605,9 +602,9 @@ function onOpen() {
         .addItem('⚙️ Configurações', 'showConfigurationSidebar')
         .addItem('Configuração do Bot (Telegram)', 'showSetupUI')
         .addSeparator()
-        // --- ADICIONE ESTA LINHA ---
         .addItem('🔄 Atualizar Menu do Bot', 'setTelegramMenu')
-        // -------------------------
+        .addSeparator()
+        .addItem('📖 Guia de Comandos', 'showCommandsGuide') // Item do Guia de Comandos
         .addSeparator()
         .addItem('✅ Verificação do Sistema', 'runSystemDiagnostics')
         .addItem('📊 Atualizar Orçamento', 'updateBudgetSpentValues')
@@ -625,10 +622,88 @@ function onOpen() {
   }
 }
 
+/**
+ * Mostra o guia de comandos interativo em um diálogo modal.
+ */
+function showCommandsGuide() {
+  // Usa createTemplateFromFile para processar o include do CSS
+  const template = HtmlService.createTemplateFromFile('Infográfico Interativo Gasto Certo');
+  const html = template.evaluate()
+      .setWidth(900)  // Largura maior para melhor visualização
+      .setHeight(700);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Guia de Comandos do Gasto Certo');
+}
+
+/**
+ * Retorna o conteúdo HTML do Guia de Comandos para ser exibido no modal do dashboard.
+ */
+function getCommandsGuideHtml() {
+  // Usa createTemplateFromFile para processar o include do CSS
+  const template = HtmlService.createTemplateFromFile('Infográfico Interativo Gasto Certo');
+  return template.evaluate().getContent();
+}
+
+/**
+ * Busca as tarefas da planilha e as formata para o calendário.
+ * VERSÃO MELHORADA: Garante que as datas são válidas e adiciona logs de erro.
+ */
+function getCalendarTasks() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tarefas');
+    if (!sheet) {
+      Logger.log('Aba "Tarefas" não encontrada.');
+      return { success: false, message: 'Aba "Tarefas" não encontrada.' };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const tasks = [];
+    
+    // Começa em 1 para ignorar o cabeçalho
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      
+      // Colunas: ID, Descrição, Data, Status
+      const id = row[0];
+      const title = row[1];
+      const dateValue = row[2];
+      const status = row[3];
+
+      // Validação para garantir que a data não está vazia e é válida
+      if (title && dateValue && !isNaN(new Date(dateValue).getTime())) {
+        const task = {
+          id: id,
+          title: title,
+          start: new Date(dateValue).toISOString().split('T')[0], // Formato YYYY-MM-DD
+          allDay: true,
+          backgroundColor: status === 'Concluída' ? 'var(--accent-green)' : 'var(--accent-purple)',
+          borderColor: status === 'Concluída' ? 'var(--accent-green)' : 'var(--accent-purple)'
+        };
+        tasks.push(task);
+      } else {
+        Logger.log(`Linha ${i + 1} ignorada: Título ou data inválida. Título: "${title}", Data: "${dateValue}"`);
+      }
+    }
+    
+    Logger.log(`Encontradas ${tasks.length} tarefas válidas.`);
+    return { success: true, tasks: tasks };
+    
+  } catch (e) {
+    Logger.log('Erro ao buscar tarefas: ' + e.stack);
+    return { success: false, message: 'Erro ao buscar tarefas: ' + e.message };
+  }
+}
+
+
 function showSetupUI() {
-  const html = HtmlService.createHtmlOutputFromFile('SetupDialog.html')
-      .setWidth(400)
-      .setHeight(550); // Aumentar a altura para o novo conteúdo
+  // 1. Crie um template a partir do arquivo
+  const template = HtmlService.createTemplateFromFile('SetupDialog');
+  
+  // 2. Avalie o template para processar os comandos internos (como o 'include')
+  const html = template.evaluate()
+      .setWidth(600) // Aumentei a largura para o novo layout
+      .setHeight(680); // Ajustei a altura
+
+  // 3. Mostre o resultado no diálogo modal
   SpreadsheetApp.getUi().showModalDialog(html, 'Configuração do Bot');
 }
 
