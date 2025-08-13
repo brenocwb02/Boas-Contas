@@ -77,7 +77,8 @@ function getScriptEditorUrl() {
 // pois elas apenas leem e escrevem dados, independentemente de como as abas foram criadas.
 
 function showConfigurationSidebar() {
-    const html = HtmlService.createHtmlOutputFromFile('Configuration.html')
+    const template = HtmlService.createTemplateFromFile('Configuration');
+    const html = template.evaluate()
         .setTitle('Configurações do Sistema');
     SpreadsheetApp.getUi().showSidebar(html);
 }
