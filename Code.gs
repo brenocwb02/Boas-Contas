@@ -42,8 +42,6 @@ function enviarLinkDashboard(chatId) {
   enviarMensagemTelegram(chatId, mensagem, { parse_mode: 'Markdown' });
 }
 
-
-
 /**
  * **FUNÇÃO ATUALIZADA E CORRIGIDA**
  * Função principal que é acionada pelo webhook do Telegram.
@@ -106,8 +104,9 @@ function doPost(e) {
       return; // Encerra a execução para esta requisição, pois já foi tratada.
     }
     
-    // NOVO: Verifica se existe um estado de edição ativo.
+    // Verifica se existe um estado de edição ou assistente ativo.
     const editState = getEditState(chatId);
+    const assistantState = getActiveAssistantState(chatId); // USA A NOVA FUNÇÃO
 
     const updateId = data.update_id;
     if (updateId) {
@@ -134,7 +133,6 @@ function doPost(e) {
         comandoBase = "/cancel";
         complemento = textoRecebido.substring('cancel_'.length);
       }
-      // NOVO: Lógica para tratar callbacks do assistente inteligente
       else if (textoRecebido.startsWith('complete_')) {
         comandoBase = "/complete_assistant_action";
         complemento = textoRecebido.substring('complete_'.length);
@@ -204,11 +202,18 @@ function doPost(e) {
           comandoBase = `/${comandoNormalizado}`;
           complemento = partesTexto.slice(1).join(" ");
       } 
+      // ### LÓGICA DE INTERCEPTAÇÃO ATUALIZADA ###
+      else if (assistantState && !textoLimpo.startsWith('/')) {
+          logToSheet(`[doPost] Estado do assistente detectado para ${chatId}. Processando resposta digitada.`, "INFO");
+          processarRespostaDoAssistente(chatId, usuario, textoRecebido, assistantState);
+          return; // Finaliza a execução
+      }
       else if (editState && !textoLimpo.startsWith('/')) {
           logToSheet(`[doPost] Estado de edição detectado para ${chatId}. Processando entrada de edição.`, "INFO");
           processarEdicaoFinal(chatId, usuario, textoRecebido, editState, dadosContas);
-          return;
+          return; // Finaliza a execução
       }
+      // ### FIM DA LÓGICA DE INTERCEPTAÇÃO ###
       else {
           comandoBase = "/lancamento";
           complemento = textoLimpo;
@@ -321,13 +326,19 @@ function doPost(e) {
             transacaoParcial.metodoPagamento = valorRealSelecionado;
           }
 
-          clearAssistantState(chatId, transacaoId);
+          // ### INÍCIO DA CORREÇÃO ###
+          // Usa a nova função para limpar o estado e o ponteiro
+          clearActiveAssistantState(chatId);
+          // ### FIM DA CORREÇÃO ###
+          
           processAssistantCompletion(transacaoParcial, chatId, usuario);
 
         } else {
           enviarMensagemTelegram(chatId, "⚠️ Esta ação expirou ou é inválida. Por favor, envie o lançamento novamente.");
           if(transacaoParcial) {
-            clearAssistantState(chatId, transacaoId);
+            // ### INÍCIO DA CORREÇÃO ###
+            clearActiveAssistantState(chatId);
+            // ### FIM DA CORREÇÃO ###
           }
         }
         return;
@@ -443,8 +454,9 @@ function doPost(e) {
             return;
       case "/cancelar_edicao":
             clearEditState(chatId);
-            enviarMensagemTelegram(chatId, "Edição cancelada.");
+            enviarMensagemTelegram(chatId, "✅ Edição finalizada.");
             return;
+
       case "/extrato":
           logToSheet(`Comando /extrato detectado. Complemento: "${complemento}"`, "INFO");
           if (!complemento) {
@@ -576,6 +588,7 @@ function doPost(e) {
   }
 }
 
+
 /**
  * Cria o menu personalizado quando a planilha é aberta.
  */
@@ -609,6 +622,8 @@ function onOpen() {
         .addItem('✅ Verificação do Sistema', 'runSystemDiagnostics')
         .addItem('📊 Atualizar Orçamento', 'updateBudgetSpentValues')
         .addSeparator()
+        // Dentro da função onOpen(), adicione esta linha ao menu principal
+        .addItem('🔧 Re-sincronizar Saldos', 'reconciliarSaldosManualmente')
         .addItem('Gerar Contas Recorrentes', 'triggerGenerateRecurringBills')
         .addToUi();
     }
@@ -863,4 +878,10 @@ function initializeSheets() {
       logSheet.appendRow(["timestamp", "level", "message"]);
       logToSheet(`Aba de sistema '${SHEET_LOGS_SISTEMA}' criada com sucesso.`, "INFO");
   }
+}
+
+function reconciliarSaldosManualmente() {
+  SpreadsheetApp.getActiveSpreadsheet().toast('Iniciando re-sincronização completa dos saldos... Isso pode levar um momento.', 'Manutenção', 30);
+  atualizarSaldosDasContas(); // Chama a função original e completa
+  SpreadsheetApp.getUi().alert('Sucesso!', 'Os saldos de todas as contas foram recalculados e sincronizados com sucesso.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
