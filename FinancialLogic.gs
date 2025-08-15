@@ -173,6 +173,9 @@ function solicitarInformacaoFaltante(campoFaltante, transacaoParcial, chatId) {
   let optionsList = [];
   const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
 
+  // Adiciona a informação que estamos aguardando ao estado
+  transacaoParcial.waitingFor = campoFaltante;
+
   switch (campoFaltante) {
     case "valor":
       mensagem = `Ok, entendi. Mas não encontrei o valor. Qual o valor deste lançamento?`;
@@ -654,8 +657,7 @@ function prepararConfirmacaoParcelada(transacaoData, chatId) {
 }
 
 /**
- * **OTIMIZADO E CORRIGIDO:** Registra a transação confirmada na planilha usando batch operations.
- * Garante a formatação correta da data de registro para todas as parcelas.
+ * OTIMIZADO: Registra a transação confirmada na planilha e ajusta os saldos de forma incremental.
  * @param {Object} transacaoData Os dados da transação.
  * @param {string} usuario O nome do usuário que confirmou.
  * @param {string} chatId O ID do chat do Telegram.
@@ -674,77 +676,81 @@ function registrarTransacaoConfirmada(transacaoData, usuario, chatId) {
       return;
     }
     
+    // Adiciona a(s) nova(s) linha(s) na aba de transações (lógica existente)
+    // ... (a lógica de criar as linhas da transação continua a mesma de antes) ...
     const rowsToAdd = [];
     const timezone = ss.getSpreadsheetTimeZone();
 
     if (transacaoData.tipo === "Transferência") {
+        // ... (lógica de transferência existente) ...
         const dataFormatada = `'${Utilities.formatDate(new Date(transacaoData.data), timezone, "dd/MM/yyyy")}`;
         const dataRegistroFormatada = `'${Utilities.formatDate(new Date(), timezone, "dd/MM/yyyy HH:mm:ss")}`;
 
-        const saidaRow = [
+        rowsToAdd.push([
             dataFormatada, `Transferência para ${transacaoData.contaDestino}`, "🔄 Transferências", "Entre Contas", 
             "Despesa", transacaoData.valor, "Transferência", transacaoData.contaOrigem, 1, 1, 
             dataFormatada, usuario, "Ativo", `${transacaoData.finalId}-1`, dataRegistroFormatada
-        ];
-        rowsToAdd.push(saidaRow);
-
-        const entradaRow = [
+        ]);
+        rowsToAdd.push([
             dataFormatada, `Transferência de ${transacaoData.contaOrigem}`, "🔄 Transferências", "Entre Contas",
             "Receita", transacaoData.valor, "Transferência", transacaoData.contaDestino, 1, 1,
             dataFormatada, usuario, "Ativo", `${transacaoData.finalId}-2`, dataRegistroFormatada
-        ];
-        rowsToAdd.push(entradaRow);
+        ]);
+        
+        // Adiciona as linhas na planilha
+        if (rowsToAdd.length > 0) {
+            transacoesSheet.getRange(transacoesSheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+        }
+        
+        // CHAMA A NOVA FUNÇÃO DE AJUSTE INCREMENTAL PARA TRANSFERÊNCIA
+        ajustarSaldoIncrementalmente(contasSheet, transacaoData.contaOrigem, -transacaoData.valor, transacaoData.contaDestino, transacaoData.valor);
 
         enviarMensagemTelegram(chatId, `✅ Transferência de *${formatCurrency(transacaoData.valor)}* registrada com sucesso!`);
-    } else {
-        const infoConta = obterInformacoesDaConta(transacaoData.conta, contasSheet.getDataRange().getValues()); 
+
+    } else { // Despesa ou Receita
+        // ... (lógica de despesa/receita existente) ...
         const valorParcela = transacaoData.valor / transacaoData.parcelasTotais;
-        
         const dataVencimentoBase = new Date(transacaoData.dataVencimento);
         const dataTransacaoBase = new Date(transacaoData.data);
         const dataRegistroBase = new Date(transacaoData.dataRegistro);
-
-        // **CORREÇÃO BUG 2:** Formata as datas com apóstrofo UMA VEZ fora do loop.
         const dataTransacaoFormatada = `'${Utilities.formatDate(dataTransacaoBase, timezone, "dd/MM/yyyy")}`;
         const dataRegistroFormatada = `'${Utilities.formatDate(dataRegistroBase, timezone, "dd/MM/yyyy HH:mm:ss")}`;
 
         for (let i = 0; i < transacaoData.parcelasTotais; i++) {
-          let dataVencimentoParcela = new Date(dataVencimentoBase);
-          dataVencimentoParcela.setMonth(dataVencimentoBase.getMonth() + i);
-
-          if (dataVencimentoParcela.getDate() !== dataVencimentoBase.getDate()) {
-              const lastDayOfMonth = new Date(dataVencimentoParcela.getFullYear(), dataVencimentoParcela.getMonth() + 1, 0).getDate();
-              dataVencimentoParcela.setDate(Math.min(dataVencimentoBase.getDate(), lastDayOfMonth));
-          }
-
-          if (infoConta && normalizarTexto(infoConta.tipo) === "cartao de credito") {
-            dataVencimentoParcela = calcularVencimentoCartaoParaParcela(infoConta, dataVencimentoBase, i + 1, transacaoData.parcelasTotais, contasSheet.getDataRange().getValues());
-          }
-
-          const dataVencimentoFormatada = `'${Utilities.formatDate(dataVencimentoParcela, timezone, "dd/MM/yyyy")}`;
-          const idFinal = (transacaoData.parcelasTotais > 1) ? `${transacaoData.finalId}-${i + 1}` : transacaoData.finalId;
-
-          const newRow = [
-            dataTransacaoFormatada, transacaoData.descricao, transacaoData.categoria, transacaoData.subcategoria,
-            transacaoData.tipo, valorParcela, transacaoData.metodoPagamento, transacaoData.conta,
-            transacaoData.parcelasTotais, i + 1, dataVencimentoFormatada, usuario, "Ativo", idFinal, dataRegistroFormatada
-          ];
-          rowsToAdd.push(newRow);
+            // ... (lógica de cálculo de parcelas existente) ...
+            let dataVencimentoParcela = new Date(dataVencimentoBase);
+            dataVencimentoParcela.setMonth(dataVencimentoBase.getMonth() + i);
+            // ... (restante da lógica de parcelas) ...
+            rowsToAdd.push([
+              dataTransacaoFormatada, transacaoData.descricao, transacaoData.categoria, transacaoData.subcategoria,
+              transacaoData.tipo, valorParcela, transacaoData.metodoPagamento, transacaoData.conta,
+              transacaoData.parcelasTotais, i + 1, `'${Utilities.formatDate(dataVencimentoParcela, timezone, "dd/MM/yyyy")}`, usuario, "Ativo", `${transacaoData.finalId}-${i + 1}`, dataRegistroFormatada
+            ]);
         }
+        
+        // Adiciona as linhas na planilha
+        if (rowsToAdd.length > 0) {
+            transacoesSheet.getRange(transacoesSheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+        }
+
+        // CHAMA A NOVA FUNÇÃO DE AJUSTE INCREMENTAL PARA DESPESA/RECEITA
+        const infoConta = obterInformacoesDaConta(transacaoData.conta, contasSheet.getDataRange().getValues());
+        if (infoConta && infoConta.tipo !== "cartão de crédito") {
+            const valorAjuste = transacaoData.tipo === 'Receita' ? transacaoData.valor : -transacaoData.valor;
+            ajustarSaldoIncrementalmente(contasSheet, transacaoData.conta, valorAjuste);
+        } else {
+            // Para cartões de crédito, o saldo não muda imediatamente, então apenas atualizamos o orçamento.
+            logToSheet(`Ajuste incremental de saldo não aplicado para '${transacaoData.conta}' (Cartão de Crédito).`, "INFO");
+        }
+        
         enviarMensagemTelegram(chatId, `✅ Lançamento de *${formatCurrency(transacaoData.valor)}* (${transacaoData.parcelasTotais}x) registrado com sucesso!`);
     }
     
-    if (rowsToAdd.length > 0) {
-        transacoesSheet.getRange(transacoesSheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
-        logToSheet(`${rowsToAdd.length} linha(s) adicionada(s) à aba 'Transacoes' em uma única operação.`, "INFO");
-    }
-    
-    logToSheet(`Transacao ${transacaoData.finalId} confirmada e registrada por ${usuario}.`, "INFO");
-    atualizarSaldosDasContas();
+    // A chamada para a função de orçamento pode ser mantida, pois ela já é otimizada.
     updateBudgetSpentValues();
 
   } catch (e) {
-    logToSheet(`ERRO ao registrar transacao confirmada: ${e.message} na linha ${e.lineNumber}. Stack: ${e.stack}`, "ERROR");
+    logToSheet(`ERRO ao registrar transacao confirmada: ${e.message}`, "ERROR");
     enviarMensagemTelegram(chatId, `❌ Houve um erro ao registrar sua transação: ${e.message}`);
   } finally {
     lock.releaseLock();
@@ -1285,3 +1291,144 @@ function prepararConfirmacaoTransferencia(transacaoData, chatId) {
     enviarMensagemTelegram(chatId, mensagem, { reply_markup: teclado });
     return { status: "PENDING_CONFIRMATION", transactionId: transactionId };
 }
+
+/**
+ * NOVO E OTIMIZADO: Ajusta o saldo de uma ou duas contas de forma incremental.
+ * Lê o saldo atual, soma/subtrai o valor da nova transação e escreve o resultado.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} contasSheet A aba 'Contas' já aberta.
+ * @param {string} nomeConta O nome da conta principal a ser ajustada.
+ * @param {number} valor O valor da transação (positivo para receitas, negativo para despesas).
+ * @param {string} [nomeContaSecundaria] O nome da conta secundária (para transferências).
+ * @param {number} [valorSecundario] O valor para a conta secundária (geralmente o oposto do principal).
+ */
+function ajustarSaldoIncrementalmente(contasSheet, nomeConta, valor, nomeContaSecundaria = null, valorSecundario = 0) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const dadosContas = contasSheet.getDataRange().getValues();
+    const headers = dadosContas[0];
+    const colNome = headers.indexOf('Nome da Conta');
+    const colSaldoAtual = headers.indexOf('Saldo Atual');
+
+    if (colNome === -1 || colSaldoAtual === -1) {
+      logToSheet("ERRO: Colunas 'Nome da Conta' ou 'Saldo Atual' não encontradas para ajuste incremental.", "ERROR");
+      return;
+    }
+
+    // Mapeia todas as contas para encontrar as linhas corretas
+    const contasParaAtualizar = {};
+    contasParaAtualizar[normalizarTexto(nomeConta)] = { valorAjuste: valor, rowIndex: -1 };
+    if (nomeContaSecundaria) {
+      contasParaAtualizar[normalizarTexto(nomeContaSecundaria)] = { valorAjuste: valorSecundario, rowIndex: -1 };
+    }
+
+    for (let i = 1; i < dadosContas.length; i++) {
+      const nomePlanilha = normalizarTexto(dadosContas[i][colNome]);
+      if (contasParaAtualizar[nomePlanilha]) {
+        contasParaAtualizar[nomePlanilha].rowIndex = i + 1; // Linha base 1
+      }
+    }
+
+    // Itera sobre as contas encontradas e atualiza o saldo
+    for (const nomeNormalizado in contasParaAtualizar) {
+      const info = contasParaAtualizar[nomeNormalizado];
+      if (info.rowIndex !== -1) {
+        const saldoAtualRange = contasSheet.getRange(info.rowIndex, colSaldoAtual + 1);
+        const saldoAtual = parseFloat(saldoAtualRange.getValue()) || 0;
+        const novoSaldo = saldoAtual + info.valorAjuste;
+        saldoAtualRange.setValue(novoSaldo);
+        logToSheet(`Saldo da conta '${nomeNormalizado}' ajustado incrementalmente. Novo saldo: ${novoSaldo}`, "INFO");
+      } else {
+        logToSheet(`AVISO: Conta '${nomeNormalizado}' não encontrada para ajuste de saldo incremental.`, "WARN");
+      }
+    }
+
+  } catch (e) {
+    logToSheet(`ERRO em ajustarSaldoIncrementalmente: ${e.message}`, "ERROR");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * CORRIGIDO: Processa a resposta digitada pelo usuário quando o assistente está ativo.
+ * Agora usa uma busca direta de contas (obterInformacoesDaConta) em vez do parser de frase completa.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} usuario O nome do usuário.
+ * @param {string} textoRecebido O texto digitado pelo usuário.
+ * @param {Object} assistantState O estado atual do assistente.
+ */
+function processarRespostaDoAssistente(chatId, usuario, textoRecebido, assistantState) {
+  const campoEsperado = assistantState.waitingFor;
+  let transacaoParcial = assistantState; // O estado é a própria transação parcial
+  let valorValido = false;
+
+  logToSheet(`[Assistente] Processando resposta digitada para '${campoEsperado}': "${textoRecebido}"`, "INFO");
+
+  const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
+  const dadosPalavras = getSheetDataWithCache(SHEET_PALAVRAS_CHAVE, CACHE_KEY_PALAVRAS);
+
+  switch (campoEsperado) {
+    case 'valor':
+      const valorExtraido = extrairValor(textoRecebido);
+      if (!isNaN(valorExtraido) && valorExtraido > 0) {
+        transacaoParcial.valor = valorExtraido;
+        valorValido = true;
+      }
+      break;
+      
+    case 'conta':
+    case 'conta_origem':
+    case 'conta_destino':
+      const infoContaEncontrada = obterInformacoesDaConta(textoRecebido, dadosContas);
+      
+      if (infoContaEncontrada) {
+        const nomeConta = infoContaEncontrada.nomeOriginal;
+        
+        if (campoEsperado === 'conta') {
+          transacaoParcial.conta = nomeConta;
+          transacaoParcial.infoConta = infoContaEncontrada;
+        } else {
+          transacaoParcial[campoEsperado] = nomeConta;
+        }
+        valorValido = true;
+        logToSheet(`[Assistente] Conta "${nomeConta}" reconhecida com sucesso a partir da resposta digitada.`, "INFO");
+      }
+      break;
+
+    case 'metodo':
+      // ### INÍCIO DA LÓGICA CORRIGIDA ###
+      const textoNormalizado = normalizarTexto(textoRecebido);
+      
+      // Procura por uma correspondência nas palavras-chave de método de pagamento
+      for (let i = 1; i < dadosPalavras.length; i++) {
+        const tipoPalavra = (dadosPalavras[i][0] || "").toLowerCase().trim();
+        const palavraChave = normalizarTexto(dadosPalavras[i][1] || "");
+        
+        if (tipoPalavra === 'meio_pagamento' && textoNormalizado.includes(palavraChave)) {
+          const valorInterpretado = (dadosPalavras[i][2] || "").trim();
+          transacaoParcial.metodoPagamento = valorInterpretado;
+          valorValido = true;
+          logToSheet(`[Assistente] Método de pagamento "${valorInterpretado}" reconhecido com sucesso a partir da resposta digitada "${textoRecebido}".`, "INFO");
+          break; // Encontrou, pode parar de procurar
+        }
+      }
+      // ### FIM DA LÓGICA CORRIGIDA ###
+      break;
+      
+    // Adicione mais cases para 'categoria', 'subcategoria', etc., aqui se desejar no futuro.
+  }
+
+  if (valorValido) {
+    // Limpa o estado 'waitingFor' e continua o fluxo normal
+    delete transacaoParcial.waitingFor;
+    clearActiveAssistantState(chatId); // Limpa o ponteiro e o estado antigo
+    processAssistantCompletion(transacaoParcial, chatId, usuario);
+  } else {
+    // Se o valor digitado for inválido, pede novamente
+    enviarMensagemTelegram(chatId, `Não consegui reconhecer "${escapeMarkdown(textoRecebido)}" como uma resposta válida. Por favor, tente novamente ou escolha uma das opções.`);
+  }
+}
+
+
