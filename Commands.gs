@@ -1635,8 +1635,8 @@ function processarConsultaLinguagemNatural(chatId, usuario, textoConsulta) {
 }
 
 /**
- * NOVO: Inicia o processo de edição da última transação do usuário.
- * Armazena o estado de edição no cache.
+ * MODIFICADO: Inicia o processo de edição da última transação do usuário.
+ * Agora apenas encontra a transação e chama a função de envio da mensagem.
  * @param {string} chatId O ID do chat do Telegram.
  * @param {string} usuario O nome do usuário.
  */
@@ -1659,7 +1659,6 @@ function iniciarEdicaoUltimo(chatId, usuario) {
   const usuarioNormalizado = normalizarTexto(usuario);
   const grupoUsuarioChat = getGrupoPorChatId(chatId, dadosConfig);
 
-  // Busca a última transação do usuário ou do grupo
   for (let i = dadosTransacoes.length - 1; i > 0; i--) {
     const linha = dadosTransacoes[i];
     const usuarioLinha = normalizarTexto(linha[11]);
@@ -1667,7 +1666,7 @@ function iniciarEdicaoUltimo(chatId, usuario) {
 
     if (usuarioLinha === usuarioNormalizado || grupoTransacao === grupoUsuarioChat) {
       ultimaTransacao = {
-        linha: i + 1, // Linha da planilha (base 1)
+        linha: i + 1,
         id: linha[13],
         data: Utilities.formatDate(parseData(linha[0]), Session.getScriptTimeZone(), "dd/MM/yyyy"),
         descricao: linha[1],
@@ -1683,53 +1682,19 @@ function iniciarEdicaoUltimo(chatId, usuario) {
         usuario: linha[11],
         status: linha[12]
       };
-      logToSheet(`[Edicao] Ultima transacao encontrada: ID ${ultimaTransacao.id}, Descricao: "${ultimaTransacao.descricao}"`, "DEBUG");
       break;
     }
   }
 
   if (!ultimaTransacao) {
     enviarMensagemTelegram(chatId, "⚠️ Nenhuma transação recente encontrada para você ou seu grupo para editar.");
-    logToSheet(`[Edicao] Nenhuma transacao encontrada para edicao para ${usuario}.`, "INFO");
     return;
   }
 
-  // Armazena o estado da edição no cache
-  setEditState(chatId, {
-    transactionId: ultimaTransacao.id,
-    rowIndex: ultimaTransacao.linha,
-    originalData: ultimaTransacao // Armazena a transação completa original
-  });
-
-  const mensagem = `✏️ *Editando seu último lançamento* (ID: \`${escapeMarkdown(ultimaTransacao.id)}\`):\n\n` +
-                   `*Data:* ${ultimaTransacao.data}\n` +
-                   `*Descricao:* ${escapeMarkdown(ultimaTransacao.descricao)}\n` +
-                   `*Valor:* ${formatCurrency(ultimaTransacao.valor)}\n` +
-                   `*Tipo:* ${ultimaTransacao.tipo}\n` +
-                   `*Conta:* ${escapeMarkdown(ultimaTransacao.conta)}\n` +
-                   `*Categoria:* ${escapeMarkdown(ultimaTransacao.categoria)}\n` +
-                   `*Subcategoria:* ${escapeMarkdown(ultimaTransacao.subcategoria)}\n` +
-                   `*Metodo:* ${escapeMarkdown(ultimaTransacao.metodoPagamento)}\n` +
-                   `*Vencimento:* ${ultimaTransacao.dataVencimento}\n\n` +
-                   `Qual campo deseja editar?`;
-
-  const teclado = {
-    inline_keyboard: [
-      [{ text: "Data", callback_data: `edit_data` },
-       { text: "Descrição", callback_data: `edit_descricao` }],
-      [{ text: "Valor", callback_data: `edit_valor` },
-       { text: "Tipo", callback_data: `edit_tipo` }],
-      [{ text: "Conta/Cartão", callback_data: `edit_conta` },
-       { text: "Categoria", callback_data: `edit_categoria` }],
-      [{ text: "Subcategoria", callback_data: `edit_subcategoria` },
-       { text: "Método Pgto", callback_data: `edit_metodoPagamento` }],
-      [{ text: "Data Vencimento", callback_data: `edit_dataVencimento` }],
-      [{ text: "❌ Cancelar Edição", callback_data: `cancelar_edicao` }]
-    ]
-  };
-
-  enviarMensagemTelegram(chatId, mensagem, { reply_markup: teclado });
+  // Chama a nova função reutilizável
+  enviarMensagemDeEdicao(chatId, ultimaTransacao);
 }
+
 
 /**
  * NOVO: Solicita ao usuário o novo valor para o campo que ele deseja editar.
@@ -1796,12 +1761,13 @@ function solicitarNovoValorParaEdicao(chatId, campo) {
 }
 
 /**
- * NOVO: Processa a entrada do usuário para a edição de um campo específico.
+ * MODIFICADO: Processa a entrada do usuário para a edição de um campo específico.
+ * Após a edição, busca a transação atualizada e pergunta se o usuário quer editar mais algo.
  * @param {string} chatId O ID do chat do Telegram.
  * @param {string} usuario O nome do usuário.
  * @param {string} novoValor O novo valor enviado pelo usuário.
- * @param {Object} editState O estado atual da edição (contém transactionId e fieldToEdit).
- * @param {Array<Array<any>>} dadosContas Dados da aba 'Contas' para validação de conta/cartão.
+ * @param {Object} editState O estado atual da edição.
+ * @param {Array<Array<any>>} dadosContas Dados da aba 'Contas'.
  */
 function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas) {
   logToSheet(`[Edicao] Processando edicao final. Transacao ID: ${editState.transactionId}, Campo: ${editState.fieldToEdit}, Novo Valor: "${novoValor}"`, "INFO");
@@ -1819,12 +1785,10 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
   const headers = transacoesSheet.getDataRange().getValues()[0];
   const colMap = getColumnMap(headers);
 
-  // Busca a linha da transação novamente (garante que não foi excluída etc.)
-  const colIdTransacao = colMap["ID Transacao"];
   let rowIndex = -1;
   const allTransactionsData = transacoesSheet.getDataRange().getValues();
   for (let i = 1; i < allTransactionsData.length; i++) {
-    if (allTransactionsData[i][colIdTransacao] === editState.transactionId) {
+    if (allTransactionsData[i][colMap["ID Transacao"]] === editState.transactionId) {
       rowIndex = i + 1;
       break;
     }
@@ -1893,27 +1857,35 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
       break;
     case "categoria":
       colIndex = colMap["Categoria"];
-      const { categoria: detectedCategory } = extrairCategoriaSubcategoria(novoValor, allTransactionsData[rowIndex-1][colMap["Tipo"]], dadosPalavras); // Passa o tipo original da transação
-      if (detectedCategory && detectedCategory !== "Não Identificada") {
-          valorParaSet = detectedCategory;
+      const dadosCategorias = getSheetDataWithCache(SHEET_CATEGORIAS, CACHE_KEY_CATEGORIAS);
+      const categoriaNormalizadaInput = normalizarTexto(novoValor);
+      
+      const matchExatoCategoria = dadosCategorias.slice(1).find(row => {
+          const { cleanCategory } = extractIconAndCleanCategory(row[0]);
+          return normalizarTexto(cleanCategory) === categoriaNormalizadaInput;
+      });
+
+      if (matchExatoCategoria) {
+          valorParaSet = matchExatoCategoria[0].trim();
           mensagemSucesso = "Categoria atualizada!";
-          // Se a categoria mudar, a subcategoria pode precisar ser reavaliada
-          // ou pode ser um bom momento para pedir a subcategoria novamente.
-          // Por simplicidade, não vamos pedir a subcategoria aqui, mas é um ponto de melhoria.
       } else {
-          mensagemSucesso = "❌ Categoria não reconhecida. Por favor, verifique as palavras-chave da categoria.";
-          erroValidacao = true;
+          const { categoria: detectedCategory } = extrairCategoriaSubcategoria(novoValor, allTransactionsData[rowIndex-1][colMap["Tipo"]], dadosPalavras);
+          if (detectedCategory && detectedCategory !== "Não Identificada") {
+              valorParaSet = detectedCategory;
+              mensagemSucesso = "Categoria atualizada!";
+          } else {
+              mensagemSucesso = "❌ Categoria não reconhecida. Por favor, digite um nome de categoria existente ou uma palavra-chave válida.";
+              erroValidacao = true;
+          }
       }
       break;
     case "subcategoria":
       colIndex = colMap["Subcategoria"];
-      const tipoTransacaoOriginal = allTransactionsData[rowIndex-1][colMap["Tipo"]]; // Obtém o tipo da transação original
+      const tipoTransacaoOriginal = allTransactionsData[rowIndex-1][colMap["Tipo"]];
       const { categoria: catOriginal, subcategoria: detectedSubcategory } = extrairCategoriaSubcategoria(novoValor, tipoTransacaoOriginal, dadosPalavras);
       if (detectedSubcategory && detectedSubcategory !== "Não Identificada") {
-          // Também tenta atualizar a categoria se a subcategoria for mais específica
           const currentCategory = allTransactionsData[rowIndex-1][colMap["Categoria"]];
           if (catOriginal && normalizarTexto(catOriginal) !== normalizarTexto(currentCategory)) {
-              // Se a nova subcategoria veio de uma categoria diferente, atualiza a categoria também
               transacoesSheet.getRange(rowIndex, colMap["Categoria"] + 1).setValue(catOriginal);
               logToSheet(`[Edicao] Categoria atualizada de '${currentCategory}' para '${catOriginal}' ao editar subcategoria.`, "DEBUG");
           }
@@ -1925,9 +1897,9 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
       }
       break;
     case "metodoPagamento":
-      colIndex = colMap["Metodo de Pagamento"]; // CORREÇÃO: Nome da coluna ajustado
+      colIndex = colMap["Metodo de Pagamento"];
       const metodoNormalizado = normalizarTexto(novoValor);
-      const metodosValidos = ["credito", "debito", "dinheiro", "pix", "boleto", "transferencia bancaria"]; // Adicionar mais se necessário
+      const metodosValidos = ["credito", "debito", "dinheiro", "pix", "boleto", "transferencia bancaria"];
       if (metodosValidos.includes(metodoNormalizado)) {
         valorParaSet = capitalize(metodoNormalizado);
         mensagemSucesso = "Método de pagamento atualizado!";
@@ -1938,6 +1910,7 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
       break;
     case "dataVencimento":
       colIndex = colMap["Data de Vencimento"];
+      // ### INÍCIO DA CORREÇÃO ###
       const parsedDueDate = parseData(novoValor);
       if (!parsedDueDate) {
         mensagemSucesso = "❌ Data de vencimento inválida. Use o formato DD/MM/AAAA.";
@@ -1946,6 +1919,7 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
         valorParaSet = Utilities.formatDate(parsedDueDate, Session.getScriptTimeZone(), "dd/MM/yyyy");
         mensagemSucesso = "Data de vencimento atualizada!";
       }
+      // ### FIM DA CORREÇÃO ###
       break;
     default:
       mensagemSucesso = "❌ Campo de edição desconhecido.";
@@ -1956,30 +1930,53 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
   if (erroValidacao) {
     enviarMensagemTelegram(chatId, mensagemSucesso);
     // Não limpa o estado de edição para permitir que o usuário tente novamente
-    // Ou pode adicionar um botão para "Cancelar Edição" aqui
     logToSheet(`[Edicao] Erro de validacao para campo '${editState.fieldToEdit}': ${mensagemSucesso}`, "WARN");
     return;
   }
 
-  // CORREÇÃO: Mover a declaração de 'lock' para fora do try
   let lock; 
   try {
     lock = LockService.getScriptLock();
     lock.waitLock(30000);
+    
     transacoesSheet.getRange(rowIndex, colIndex + 1).setValue(valorParaSet);
     logToSheet(`[Edicao] Transacao ID ${editState.transactionId} - Campo '${editState.fieldToEdit}' atualizado para: "${valorParaSet}".`, "INFO");
-    enviarMensagemTelegram(chatId, `✅ ${mensagemSucesso}`);
-    atualizarSaldosDasContas(); // Recalcula saldos após a atualização
-    clearEditState(chatId); // Limpa o estado de edição após o sucesso
+    
+    atualizarSaldosDasContas(); 
+
+    const dadosTransacoesAtualizados = transacoesSheet.getDataRange().getValues();
+    let transacaoAtualizada = null;
+    for (let i = 1; i < dadosTransacoesAtualizados.length; i++) {
+        if (dadosTransacoesAtualizados[i][colMap["ID Transacao"]] === editState.transactionId) {
+            const linha = dadosTransacoesAtualizados[i];
+            transacaoAtualizada = {
+                linha: i + 1, id: linha[13], data: Utilities.formatDate(parseData(linha[0]), Session.getScriptTimeZone(), "dd/MM/yyyy"),
+                descricao: linha[1], categoria: linha[2], subcategoria: linha[3], tipo: linha[4],
+                valor: parseBrazilianFloat(String(linha[5])), metodoPagamento: linha[6], conta: linha[7],
+                parcelasTotais: linha[8], parcelaAtual: linha[9], dataVencimento: Utilities.formatDate(parseData(linha[10]), Session.getScriptTimeZone(), "dd/MM/yyyy"),
+                usuario: linha[11], status: linha[12]
+            };
+            break;
+        }
+    }
+
+    if (transacaoAtualizada) {
+        enviarMensagemDeEdicao(chatId, transacaoAtualizada);
+    } else {
+        enviarMensagemTelegram(chatId, "✅ Alteração salva! Edição finalizada.");
+        clearEditState(chatId);
+    }
+
   } catch (e) {
     logToSheet(`ERRO ao atualizar transacao ID ${editState.transactionId}: ${e.message}`, "ERROR");
     enviarMensagemTelegram(chatId, `❌ Houve um erro ao atualizar o lançamento: ${e.message}`);
   } finally {
-    if (lock) { // Verifica se lock foi definido antes de tentar liberar
+    if (lock) {
       lock.releaseLock();
     }
   }
 }
+
 
 /**
  * NOVO: Envia um resumo financeiro do mês para um usuário específico.
@@ -2260,4 +2257,49 @@ function enviarSaudeFinanceira(chatId, usuario) {
   mensagem += `● *Gasto Diário Médio:* 💸 ${formatCurrency(gastoDiarioMedio)}\n_Até agora, este é o seu gasto médio por dia neste mês._`;
 
   enviarMensagemTelegram(chatId, mensagem)
+}
+
+
+/**
+ * NOVO: Envia a mensagem de edição para uma transação específica.
+ * Reutilizável para iniciar a edição e para continuar após uma alteração.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {Object} transacao O objeto completo da transação a ser editada.
+ */
+function enviarMensagemDeEdicao(chatId, transacao) {
+  // Armazena o estado da edição no cache
+  setEditState(chatId, {
+    transactionId: transacao.id,
+    rowIndex: transacao.linha,
+    originalData: transacao // Armazena a transação completa
+  });
+
+  const mensagem = `✏️ *Editando o lançamento* (ID: \`${escapeMarkdown(transacao.id)}\`):\n\n` +
+                   `*Data:* ${transacao.data}\n` +
+                   `*Descricao:* ${escapeMarkdown(transacao.descricao)}\n` +
+                   `*Valor:* ${formatCurrency(transacao.valor)}\n` +
+                   `*Tipo:* ${transacao.tipo}\n` +
+                   `*Conta:* ${escapeMarkdown(transacao.conta)}\n` +
+                   `*Categoria:* ${escapeMarkdown(transacao.categoria)}\n` +
+                   `*Subcategoria:* ${escapeMarkdown(transacao.subcategoria)}\n` +
+                   `*Metodo:* ${escapeMarkdown(transacao.metodoPagamento)}\n` +
+                   `*Vencimento:* ${transacao.dataVencimento}\n\n` +
+                   `Qual campo deseja editar? Ou clique em 'Finalizar'.`;
+
+  const teclado = {
+    inline_keyboard: [
+      [{ text: "Data", callback_data: `edit_data` },
+       { text: "Descrição", callback_data: `edit_descricao` }],
+      [{ text: "Valor", callback_data: `edit_valor` },
+       { text: "Tipo", callback_data: `edit_tipo` }],
+      [{ text: "Conta/Cartão", callback_data: `edit_conta` },
+       { text: "Categoria", callback_data: `edit_categoria` }],
+      [{ text: "Subcategoria", callback_data: `edit_subcategoria` },
+       { text: "Método Pgto", callback_data: `edit_metodoPagamento` }],
+      [{ text: "Data Vencimento", callback_data: `edit_dataVencimento` }],
+      [{ text: "✅ Finalizar Edição", callback_data: `cancelar_edicao` }] // Reutilizamos o callback de cancelar para finalizar
+    ]
+  };
+
+  enviarMensagemTelegram(chatId, mensagem, { reply_markup: teclado });
 }
