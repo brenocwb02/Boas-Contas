@@ -16,7 +16,7 @@ function doGet(e) {
     if (!isLicenseValid()) {
       logToSheet("[Dashboard Access] Acesso bloqueado: Licença do produto inválida.", "ERROR");
       // Retorna uma página de erro de licença (você precisará criar este arquivo HTML)
-      return HtmlService.createHtmlOutputFromFile('AcessoNegadoLicenca.html').setTitle("Licença Inválida");
+      return HtmlService.createHtmlOutputFromFile('AcessoNegadoLicensa.html').setTitle("Licença Inválida");
     }
 
     // PASSO 2: VERIFICAÇÃO DO TOKEN DE ACESSO TEMPORÁRIO (lógica existente)
@@ -715,9 +715,9 @@ function getTransactionsByCategory(categoryName, month, year) {
 
     const transactions = [];
 
+    // ### INÍCIO DA CORREÇÃO ###
     // Função auxiliar para remover emojis e normalizar, se necessário.
     function extractIconAndCleanCategory(categoryString) {
-      // CORREÇÃO CRÍTICA AQUI: Converte para string antes de qualquer operação.
       const str = String(categoryString || "");
       if (!str) return { cleanCategory: "", icon: "" };
       const match = str.match(/^(\p{Emoji}|\p{Emoji_Modifier_Base}|\p{Emoji_Component}|\p{Emoji_Modifier}|\p{Emoji_Presentation})\s*(.*)/u);
@@ -726,15 +726,17 @@ function getTransactionsByCategory(categoryName, month, year) {
       }
       return { cleanCategory: str.trim(), icon: "" };
     }
+    // ### FIM DA CORREÇÃO ###
 
     for (let i = 1; i < dadosTransacoes.length; i++) {
       const row = dadosTransacoes[i];
-      const data = parseData(row[0]);
+      // CORREÇÃO: A busca deve ser feita pela data de VENCIMENTO para corresponder ao gráfico
+      const data = parseData(row[10]); // Coluna K: Data de Vencimento
       const { cleanCategory: transCategory } = extractIconAndCleanCategory(row[2]);
 
       if (data && data.getMonth() === targetMonth && data.getFullYear() === year && normalizarTexto(transCategory) === normalizarTexto(categoryName)) {
         transactions.push({
-          data: Utilities.formatDate(data, Session.getScriptTimeZone(), "dd/MM/yyyy"),
+          data: Utilities.formatDate(parseData(row[0]), Session.getScriptTimeZone(), "dd/MM/yyyy"), // Mostra a data real da transação
           descricao: row[1],
           categoria: row[2],
           subcategoria: row[3],
