@@ -127,6 +127,10 @@ function formatCurrency(value) {
  * @returns {Date|null} Um objeto Date ou null se a conversão falhar.
  */
 function parseData(valor) {
+  if (!valor || (typeof valor === 'string' && valor.trim() === '')) {
+    return null;
+  }
+
   if (valor instanceof Date) return valor;
 
   if (typeof valor !== "string") {
@@ -134,38 +138,54 @@ function parseData(valor) {
     return null;
   }
 
-  const timezone = Session.getScriptTimeZone(); // Obtém o fuso horário do script
+  const timezone = Session.getScriptTimeZone();
   let parsedDate = null;
 
   // Tenta formato DD/MM/YYYY
-  if (valor.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+  if (valor.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
     try {
-      // Utilities.parseDate funciona melhor com MM/DD/YYYY ou YYYY-MM-DD
-      // Vamos reformatar para MM/DD/YYYY antes de passar para Utilities.parseDate
       const parts = valor.split("/");
-      const reformattedDate = `${parts[1]}/${parts[0]}/${parts[2]}`; // MM/DD/YYYY
-      parsedDate = Utilities.parseDate(reformattedDate, timezone, "MM/dd/yyyy");
-      logToSheet(`[parseData] Parsed DD/MM/YYYY "${valor}" para ${parsedDate.toLocaleDateString()} (via reformat).`, "DEBUG");
-      return parsedDate;
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const year = parseInt(parts[2], 10);
+
+      // Validação básica de intervalo
+      if (month < 1 || month > 12 || day < 1 || day > 31) {
+          throw new Error("Dia ou mês fora do intervalo válido.");
+      }
+
+      // Cria a data. O JS irá auto-corrigir se o dia for inválido para o mês (ex: 31/04 -> 01/05)
+      const dateObject = new Date(year, month - 1, day);
+
+      // ### INÍCIO DA CORREÇÃO ###
+      // Verifica se a data não "rolou" para o mês/ano seguinte.
+      // Se o dia, mês ou ano que o JS criou for diferente do que foi inserido, a data é inválida.
+      if (dateObject.getFullYear() !== year || dateObject.getMonth() !== month - 1 || dateObject.getDate() !== day) {
+        throw new Error("Data inválida, valores foram ajustados automaticamente pelo JavaScript.");
+      }
+      // ### FIM DA CORREÇÃO ###
+      
+      return dateObject;
     } catch (e) {
-      logToSheet(`[parseData] Erro ao tentar parsear DD/MM/YYYY "${valor}" (reformat): ${e.message}`, "DEBUG");
+      // Continua para a próxima tentativa se a validação falhar
     }
   }
 
   // Tenta formato YYYY-MM-DD
   if (valor.match(/^\d{4}-\d{2}-\d{2}$/)) {
     try {
+      // Utilities.parseDate é seguro para este formato
       parsedDate = Utilities.parseDate(valor, timezone, "yyyy-MM-dd");
-      logToSheet(`[parseData] Parsed YYYY-MM-DD "${valor}" para ${parsedDate.toLocaleDateString()}.`, "DEBUG");
       return parsedDate;
     } catch (e) {
-      logToSheet(`[parseData] Erro ao tentar parsear YYYY-MM-DD "${valor}": ${e.message}`, "DEBUG");
+      // Continua
     }
   }
   
-  logToSheet(`[parseData] Falha ao parsear data "${valor}" em qualquer formato reconhecido. Retornando null.`, "WARN");
+  logToSheet(`[parseData] Falha ao parsear data "${valor}" em qualquer formato reconhecido.`, "WARN");
   return null;
 }
+
 
 /**
  * Obtém o nome do mês em português a partir do índice (0-11).
