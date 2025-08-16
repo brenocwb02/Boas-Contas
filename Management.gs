@@ -93,18 +93,6 @@ function clearEditState(chatId) {
   logToSheet(`Estado de EDIÇÃO para ${chatId} limpo.`, "INFO");
 }
 
-// --- Funções de Estado do Assistente (NOVAS) ---
-/**
- * NOVO: Define o estado do assistente de um usuário no cache.
- * @param {string} chatId O ID do chat do Telegram.
- * @param {Object} stateData Os dados da transação parcial.
- */
-function setAssistantState(chatId, stateData) {
-  const cache = CacheService.getScriptCache();
-  const cacheKey = `${CACHE_KEY_ASSISTANT_STATE}_${chatId}_${stateData.id}`;
-  cache.put(cacheKey, JSON.stringify(stateData), CACHE_EXPIRATION_PENDING_TRANSACTION_SECONDS);
-  logToSheet(`Estado do ASSISTENTE para ${chatId} (Transação ID ${stateData.id}) salvo.`, "DEBUG");
-}
 
 /**
  * NOVO: Obtém o estado do assistente de um usuário do cache.
@@ -125,17 +113,69 @@ function getAssistantState(chatId, transactionId) {
 }
 
 /**
- * NOVO: Limpa o estado do assistente de um usuário do cache.
+ * MODIFICADO: Define o estado do assistente e um ponteiro de estado ativo.
  * @param {string} chatId O ID do chat do Telegram.
- * @param {string} transactionId O ID da transação parcial.
+ * @param {Object} stateData Os dados da transação parcial.
  */
-function clearAssistantState(chatId, transactionId) {
+function setAssistantState(chatId, stateData) {
   const cache = CacheService.getScriptCache();
-  const cacheKey = `${CACHE_KEY_ASSISTANT_STATE}_${chatId}_${transactionId}`;
-  cache.remove(cacheKey);
-  logToSheet(`Estado do ASSISTENTE para ${chatId} (Transação ID ${transactionId}) limpo.`, "INFO");
+  const transactionId = stateData.id;
+  
+  // Salva o estado completo da transação
+  const stateKey = `${CACHE_KEY_ASSISTANT_STATE}_${chatId}_${transactionId}`;
+  cache.put(stateKey, JSON.stringify(stateData), CACHE_EXPIRATION_PENDING_TRANSACTION_SECONDS);
+
+  // Salva um ponteiro simples indicando qual transação está ativa para este chat
+  const pointerKey = `${CACHE_KEY_ASSISTANT_STATE}_active_${chatId}`;
+  cache.put(pointerKey, stateKey, CACHE_EXPIRATION_PENDING_TRANSACTION_SECONDS);
+
+  logToSheet(`Estado do ASSISTENTE para ${chatId} (Transação ID ${transactionId}) salvo. Ponteiro ativo definido.`, "DEBUG");
 }
 
+/**
+ * NOVO: Obtém o estado do assistente ativo para um determinado chat.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @returns {Object|null} O objeto de estado do assistente ou null se não houver estado ativo.
+ */
+function getActiveAssistantState(chatId) {
+  const cache = CacheService.getScriptCache();
+  const pointerKey = `${CACHE_KEY_ASSISTANT_STATE}_active_${chatId}`;
+  
+  // 1. Tenta encontrar o ponteiro para o estado ativo
+  const activeStateKey = cache.get(pointerKey);
+  if (!activeStateKey) {
+    return null; // Nenhum assistente ativo para este chat
+  }
+
+  // 2. Usa a chave do ponteiro para obter o estado completo
+  const cachedState = cache.get(activeStateKey);
+  if (cachedState) {
+    const state = JSON.parse(cachedState);
+    logToSheet(`Estado ATIVO do ASSISTENTE para ${chatId} recuperado da chave: ${activeStateKey}.`, "DEBUG");
+    return state;
+  }
+  
+  return null;
+}
+
+/**
+ * NOVO: Limpa o estado ativo do assistente e o ponteiro.
+ * @param {string} chatId O ID do chat do Telegram.
+ */
+function clearActiveAssistantState(chatId) {
+  const cache = CacheService.getScriptCache();
+  const pointerKey = `${CACHE_KEY_ASSISTANT_STATE}_active_${chatId}`;
+  
+  // Pega a chave do estado completo antes de apagar o ponteiro
+  const activeStateKey = cache.get(pointerKey);
+  
+  if (activeStateKey) {
+    cache.remove(activeStateKey); // Remove o estado completo
+  }
+  cache.remove(pointerKey); // Remove o ponteiro
+
+  logToSheet(`Estado ATIVO do ASSISTENTE e ponteiro para ${chatId} limpos.`, "INFO");
+}
 
 /**
  * Lida com o fluxo do tutorial, enviando mensagens e gerenciando o estado.
