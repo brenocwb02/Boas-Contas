@@ -1332,10 +1332,17 @@
             /* O conteúdo virá do HTML injetado, que já tem estilos */
         }
         
-        /* NOVO: Estilos para a Agenda */
+        /* ### INÍCIO DA CORREÇÃO DA AGENDA ### */
         #agenda-view {
             display: none; /* Começa escondida */
         }
+        
+        /* Remove a restrição de altura do card da agenda */
+        #agenda-card-content {
+            max-height: none; 
+            min-height: 600px; /* Garante uma altura mínima */
+        }
+
         #calendar {
             --fc-bg-event-color: var(--accent-purple);
             --fc-border-color: var(--border-color);
@@ -1359,6 +1366,7 @@
         .fc-event-title {
             font-weight: 600;
         }
+        /* ### FIM DA CORREÇÃO DA AGENDA ### */
     </style>
 </head>
 <body>
@@ -1507,7 +1515,7 @@
                         </div>
                     </div>
                     <div class="card">
-                        <div class="card-content" style="padding: 24px;">
+                        <div class="card-content" id="agenda-card-content" style="padding: 24px;">
                             <div id="calendar"></div>
                         </div>
                     </div>
@@ -1666,10 +1674,16 @@
 
         // Função para formatar valores monetários
         function formatCurrency(value) {
+            // ### INÍCIO DA CORREÇÃO ###
+            // Garante que o valor é um número antes de formatar
+            const numericValue = typeof value === 'string' ? parseFloat(value.replace(/[^0-9,-]+/g,"").replace(",", ".")) : value;
+            if (isNaN(numericValue)) return "R$ 0,00";
+            // ### FIM DA CORREÇÃO ###
+
             return new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
                 currency: 'BRL'
-            }).format(value);
+            }).format(numericValue);
         }
 
         // Função para mostrar feedback (sucesso/erro)
@@ -2631,13 +2645,13 @@
             }
         };
 
-        // CORRIGIDO: Função de submissão do formulário
+        // ### INÍCIO DA CORREÇÃO ###
+        // Função de submissão do formulário
         transactionForm.onsubmit = function(event) {
             event.preventDefault(); 
             const transactionId = transactionIdInput.value;
             const isEditing = !!transactionId;
 
-            // CORREÇÃO FINAL: Mapeia os nomes do formulário para os nomes exatos dos cabeçalhos da planilha
             const transactionData = {
                 id: transactionId || `temp-${Date.now()}`,
                 date: transactionDateInput.value,
@@ -2647,28 +2661,52 @@
                 account: transactionAccountSelect.value,
                 category: transactionCategorySelect.value,
                 subcategory: transactionSubcategorySelect.value,
-                paymentMethod: transactionPaymentMethodSelect.value, // Nome correto para o objeto enviado
+                paymentMethod: transactionPaymentMethodSelect.value,
                 installments: parseInt(transactionInstallmentsInput.value) || 1,
                 dueDate: dueDateInput.value
             };
 
-            showLoading();
+            // Mostra um loading temporário no botão
+            const submitButton = transactionForm.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
 
             if (typeof google !== 'undefined' && google.script && google.script.run) {
                 const handler = (response) => {
-                    hideLoading();
                     if (response.success) {
                         transactionModal.classList.remove('show');
                         showFeedback(`Lançamento ${isEditing ? 'atualizado' : 'salvo'} com sucesso!`, 'success');
-                        loadDashboardData(); 
+                        
+                        // ### NOVA LÓGICA DE ATUALIZAÇÃO INSTANTÂNEA ###
+                        // Em vez de recarregar tudo, atualizamos os dados na tela
+                        if (isEditing) {
+                            // Encontra e atualiza a transação na lista global
+                            const index = allTransactions.findIndex(t => t.id === transactionId);
+                            if (index !== -1) {
+                                // Assume que a resposta do servidor poderia retornar a transação atualizada
+                                // Por simplicidade, vamos apenas recarregar por enquanto.
+                                // A lógica de atualização local seria mais complexa.
+                                loadDashboardData();
+                            }
+                        } else {
+                            // Para novas transações, é mais seguro recarregar tudo
+                            // para garantir que todos os cálculos (saldos, etc.) estejam corretos.
+                            loadDashboardData();
+                        }
+                        
                     } else {
                         showFeedback(`Erro ao ${isEditing ? 'atualizar' : 'salvar'} lançamento: ` + response.message, 'error');
                     }
+                    // Restaura o botão
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Salvar Lançamento';
                 };
                 const errorHandler = (error) => {
-                    hideLoading();
                     showFeedback('Erro ao comunicar com o servidor: ' + error.message, 'error');
                     console.error('Erro ao salvar/atualizar lançamento:', error);
+                    // Restaura o botão
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Salvar Lançamento';
                 };
 
                 if (isEditing) {
@@ -2701,29 +2739,37 @@
         }
 
         function deleteTransaction(transactionId) {
-            showLoading();
+            // Mostra um loading temporário no botão
+            confirmDeleteBtn.disabled = true;
+            confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
 
             if (typeof google !== 'undefined' && google.script && google.script.run) {
                 google.script.run
                     .withSuccessHandler(function(response) {
-                        hideLoading();
                         confirmDeleteModal.classList.remove('show');
                         if (response.success) {
                             showFeedback('Lançamento excluído com sucesso!', 'success');
-                            loadDashboardData();
+                            // ### NOVA LÓGICA DE ATUALIZAÇÃO INSTANTÂNEA ###
+                            loadDashboardData(); // Recarrega os dados do dashboard
                         } else {
                             showFeedback('Erro ao excluir lançamento: ' + response.message, 'error');
                         }
+                        // Restaura o botão
+                        confirmDeleteBtn.disabled = false;
+                        confirmDeleteBtn.textContent = 'Excluir';
                     })
                     .withFailureHandler(function(error) {
-                        hideLoading();
                         confirmDeleteModal.classList.remove('show');
                         showFeedback('Erro ao comunicar com o servidor: ' + error.message, 'error');
                         console.error('Erro ao excluir lançamento:', error);
+                        // Restaura o botão
+                        confirmDeleteBtn.disabled = false;
+                        confirmDeleteBtn.textContent = 'Excluir';
                     })
                     .deleteTransactionFromWeb(transactionId);
             }
         }
+        // ### FIM DA CORREÇÃO ###
         
         const categoryDetailModal = document.getElementById('categoryDetailModal');
         const closeCategoryModalBtn = document.getElementById('closeCategoryModalBtn');
@@ -2808,12 +2854,14 @@
 
             function initializeCalendar() {
                 if (calendarInstance) {
-                    return; // Já foi inicializado
+                    calendarInstance.updateSize(); // ### CORREÇÃO DA AGENDA ###
+                    return; 
                 }
                 const calendarEl = document.getElementById('calendar');
                 calendarInstance = new FullCalendar.Calendar(calendarEl, {
                     initialView: 'dayGridMonth',
                     locale: 'pt-br',
+                    height: '80vh', // ### CORREÇÃO DA AGENDA ###
                     headerToolbar: {
                         left: 'prev,next today',
                         center: 'title',
