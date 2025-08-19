@@ -1145,3 +1145,13 @@ function getColumnMap(headers) {
   });
   return map;
 }
+
+/**
+ * Função chamada pelo menu do Add-on para abrir o dashboard numa janela modal.
+ */
+function showDashboard() {
+  const html = HtmlService.createHtmlOutputFromFile('Dashboard')
+      .setWidth(1200)
+      .setHeight(700);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Boas Contas Dashboard');
+}
