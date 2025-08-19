@@ -43,6 +43,15 @@ function enviarLinkDashboard(chatId) {
 }
 
 /**
+ * Função executada quando o Add-on é instalado pela primeira vez pelo utilizador.
+ * @param {Object} e O objeto de evento de instalação.
+ */
+function onInstall(e) {
+  onOpen(e);
+}
+
+
+/**
  * **FUNÇÃO ATUALIZADA E CORRIGIDA**
  * Função principal que é acionada pelo webhook do Telegram.
  * A verificação da configuração guiada agora tem prioridade máxima e trata o /start inicial.
@@ -590,48 +599,41 @@ function doPost(e) {
 
 
 /**
- * Cria o menu personalizado quando a planilha é aberta.
+ * Função executada quando a planilha é aberta. Cria o menu do Add-on.
+ * @param {Object} e O objeto de evento de abertura.
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   try {
-    // Tenta executar a lógica completa
     const props = PropertiesService.getScriptProperties();
     const systemStatus = props.getProperty('SYSTEM_STATUS');
 
+    const menu = ui.createMenu('Boas Contas'); // Nome do Add-on no menu
+
     if (!isLicenseValid()) {
-      // Estágio 1: Não ativado
-      ui.createMenu('Gasto Certo')
-        .addItem('⚠️ Ativar Produto', 'activateProduct')
-        .addToUi();
+      menu.addItem('⚠️ Ativar Produto', 'activateProduct');
     } else if (systemStatus !== 'INITIALIZED') {
-      // Estágio 2: Ativado, mas não inicializado
-      ui.createMenu('Gasto Certo')
-        .addItem('🚀 Inicializar Sistema', 'initializeSystem')
-        .addToUi();
+      menu.addItem('🚀 Inicializar Sistema', 'initializeSystem');
     } else {
-      // Estágio 3: Ativado e inicializado (menu completo)
-      ui.createMenu('Gasto Certo')
-        .addItem('⚙️ Configurações', 'showConfigurationSidebar')
-        .addItem('Configuração do Bot (Telegram)', 'showSetupUI')
-        .addSeparator()
-        .addItem('🔄 Atualizar Menu do Bot', 'setTelegramMenu')
-        .addSeparator()
-        .addItem('📖 Guia de Comandos', 'showCommandsGuide') // Item do Guia de Comandos
-        .addSeparator()
-        .addItem('✅ Verificação do Sistema', 'runSystemDiagnostics')
-        .addItem('📊 Atualizar Orçamento', 'updateBudgetSpentValues')
-        .addSeparator()
-        // Dentro da função onOpen(), adicione esta linha ao menu principal
-        .addItem('🔧 Re-sincronizar Saldos', 'reconciliarSaldosManualmente')
-        .addItem('Gerar Contas Recorrentes', 'triggerGenerateRecurringBills')
-        .addToUi();
+      // Menu completo para sistema ativado e inicializado
+      menu.addItem('📊 Abrir Dashboard', 'showDashboard'); // ITEM ADICIONADO
+      menu.addItem('⚙️ Configurações', 'showConfigurationSidebar');
+      menu.addItem('🤖 Configuração do Bot (Telegram)', 'showSetupUI');
+      menu.addSeparator();
+      menu.addItem('🔄 Atualizar Menu do Bot', 'setTelegramMenu');
+      menu.addSeparator();
+      menu.addItem('📖 Guia de Comandos', 'showCommandsGuide');
+      menu.addSeparator();
+      menu.addItem('✅ Verificação do Sistema', 'runSystemDiagnostics');
+      menu.addItem('💰 Atualizar Orçamento', 'updateBudgetSpentValues');
+      menu.addSeparator();
+      menu.addItem('🔧 Re-sincronizar Saldos', 'reconciliarSaldosManualmente');
+      menu.addItem('🗓️ Gerar Contas Recorrentes', 'triggerGenerateRecurringBills');
     }
+    menu.addToUi();
   } catch (e) {
-    // Se ocorrer um erro (provavelmente porque o script não está autorizado),
-    // cria o menu de ativação básico.
     logToSheet(`Erro em onOpen (provavelmente autorização pendente): ${e.message}`, "INFO");
-    ui.createMenu('Gasto Certo')
+    ui.createMenu('Boas Contas')
       .addItem('⚠️ Ativar Produto', 'activateProduct')
       .addToUi();
   }
