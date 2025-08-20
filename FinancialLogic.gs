@@ -750,8 +750,7 @@ function registrarTransacaoConfirmada(transacaoData, usuario, chatId) {
     updateBudgetSpentValues();
 
   } catch (e) {
-    logToSheet(`ERRO ao registrar transacao confirmada: ${e.message}`, "ERROR");
-    enviarMensagemTelegram(chatId, `❌ Houve um erro ao registrar sua transação: ${e.message}`);
+    handleError(e, "registrarTransacaoConfirmada", chatId);
   } finally {
     lock.releaseLock();
   }
@@ -875,8 +874,7 @@ function atualizarSaldosDasContas() {
     const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
     
     if (!contasSheet || !transacoesSheet) {
-      logToSheet("Erro: Aba 'Contas' ou 'Transacoes' não encontrada.", "ERROR");
-      return;
+      throw new Error("Aba 'Contas' ou 'Transacoes' não encontrada para atualização de saldos.");
     }
 
     const dadosContas = contasSheet.getDataRange().getValues();
@@ -989,7 +987,7 @@ function atualizarSaldosDasContas() {
     logToSheet("[AtualizarSaldos] Passo 4/4: Planilha 'Contas' atualizada.", "INFO");
 
   } catch (e) {
-    logToSheet(`ERRO FATAL em atualizarSaldosDasContas: ${e.message} na linha ${e.lineNumber}. Stack: ${e.stack}`, "ERROR");
+    handleError(e, "atualizarSaldosDasContas");
   } finally {
     lock.releaseLock();
   }
