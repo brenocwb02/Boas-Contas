@@ -1491,6 +1491,29 @@
                         <div class="main-grid">
                             <!-- Left Column -->
                             <div class="left-column">
+                                <!-- ###################################################### -->
+                                <!-- ##      INÍCIO DA ATUALIZAÇÃO: NOVO CARTÃO          ## -->
+                                <!-- ###################################################### -->
+                                <div class="card" id="needs-wants-section">
+                                    <div class="card-header">
+                                        <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-orange));">
+                                            <i class="fas fa-balance-scale-right"></i>
+                                        </div>
+                                        <div class="card-title">Necessidades vs. Desejos</div>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="chart-container" style="min-height: 280px;">
+                                            <canvas id="needs-wants-chart"></canvas>
+                                        </div>
+                                        <div id="needs-wants-empty" class="empty-state" style="display: none;">
+                                            <i class="fas fa-question-circle"></i>
+                                            <div>Sem dados para análise.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- ###################################################### -->
+                                <!-- ##       FIM DA ATUALIZAÇÃO: NOVO CARTÃO            ## -->
+                                <!-- ###################################################### -->
                                 <div class="card" id="account-balances-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));"><i class="fas fa-university"></i></div><div class="card-title">Saldos das Contas</div></div><div class="card-content"><div id="account-balances"><div class="empty-state"><i class="fas fa-coins"></i><div>Nenhuma conta encontrada</div></div></div></div></div>
                                 <div class="card" id="expenses-chart-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal));"><i class="fas fa-chart-bar"></i></div><div class="card-title">Despesas por Categoria (Clique para ver detalhes)</div></div><div class="card-content"><div class="chart-container"><canvas id="expenses-chart"></canvas></div><div id="expenses-chart-empty" class="empty-state" style="display: none;"><i class="fas fa-chart-bar"></i><div>Nenhum dado de despesas para o gráfico.</div></div></div></div>
                                 <div class="card" id="goals-progress-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-green), var(--accent-teal));"><i class="fas fa-bullseye"></i></div><div class="card-title">Progresso das Metas</div></div><div class="card-content"><div id="goals-progress"><div class="empty-state"><i class="fas fa-target"></i><div>Nenhuma meta definida</div></div></div></div></div>
@@ -1660,7 +1683,7 @@
         // Global variables for chart instances
         let expensesChartInstance = null;
         let budgetChartInstance = null;
-        // NOVO: Variável global para a instância do calendário
+        let needsWantsChartInstance = null; // <-- NOVA VARIÁVEL
         let calendarInstance = null;
 
         // Register the datalabels plugin globally
@@ -1668,18 +1691,14 @@
 
         // Global data for dropdowns
         let allAccounts = [];
-        let allCategories = {}; // { "Categoria Principal": ["Subcategoria1", "Subcategoria2"], ... }
+        let allCategories = {};
         let allPaymentMethods = [];
-        let allTransactions = []; // CORRIGIDO: Variável global para todas as transações
+        let allTransactions = [];
 
         // Função para formatar valores monetários
         function formatCurrency(value) {
-            // ### INÍCIO DA CORREÇÃO ###
-            // Garante que o valor é um número antes de formatar
             const numericValue = typeof value === 'string' ? parseFloat(value.replace(/[^0-9,-]+/g,"").replace(",", ".")) : value;
             if (isNaN(numericValue)) return "R$ 0,00";
-            // ### FIM DA CORREÇÃO ###
-
             return new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
                 currency: 'BRL'
@@ -1691,34 +1710,24 @@
             const feedbackMessage = document.getElementById('feedback-message');
             const feedbackIcon = document.getElementById('feedback-icon');
             const feedbackText = document.getElementById('feedback-text');
-
             feedbackMessage.classList.remove('success', 'error', 'show');
             feedbackMessage.classList.add(type);
             feedbackText.textContent = message;
-
             if (type === 'success') {
                 feedbackIcon.innerHTML = '<i class="fas fa-check-circle"></i>';
             } else if (type === 'error') {
                 feedbackIcon.innerHTML = '<i class="fas fa-times-circle"></i>';
             }
-
             feedbackMessage.classList.add('show');
-
-            // Hide after 3 seconds
             setTimeout(() => {
                 feedbackMessage.classList.remove('show');
             }, 3000);
         }
 
-        // Função para mostrar erro (mantida para o container de erro principal)
+        // Função para mostrar erro
         function showError(message) {
             const errorContainer = document.getElementById('error-container');
-            errorContainer.innerHTML = `
-                <div class="error-message">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Erro:</strong> ${message}
-                </div>
-            `;
+            errorContainer.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-triangle"></i><strong>Erro:</strong> ${message}</div>`;
         }
 
         // Função para limpar erro
@@ -1726,14 +1735,12 @@
             document.getElementById('error-container').innerHTML = '';
         }
 
-        // Função para mostrar loading
+        // Funções de loading
         function showLoading() {
             document.getElementById('loading').style.display = 'flex';
             document.getElementById('dashboard-content').style.display = 'none';
             clearError();
         }
-
-        // Função para esconder loading
         function hideLoading() {
             document.getElementById('loading').style.display = 'none';
             document.getElementById('dashboard-content').style.display = 'block';
@@ -1742,605 +1749,226 @@
         // Função para atualizar horário da última atualização
         function updateLastUpdateTime(month, year) {
             const now = new Date();
-            const timeString = now.toLocaleTimeString('pt-BR', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-                                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            const timeString = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
             document.getElementById('last-update-time').textContent = `${monthNames[month]}/${year} - ${timeString}`;
         }
 
-        // Função para renderizar resumo mensal
+        // Funções de renderização
         function renderSummary(summary) {
             document.getElementById('total-receitas').textContent = formatCurrency(summary.totalReceitas);
             document.getElementById('total-despesas').textContent = formatCurrency(summary.totalDespesas);
-            document.getElementById('saldo-liquido').textContent = formatCurrency(summary.saldoLiquidoMes);
-
             const saldoElement = document.getElementById('saldo-liquido');
+            saldoElement.textContent = formatCurrency(summary.saldoLiquidoMes);
             saldoElement.classList.remove('positive', 'negative', 'neutral');
-            if (summary.saldoLiquidoMes > 0) {
-                saldoElement.classList.add('positive');
-            } else if (summary.saldoLiquidoMes < 0) {
-                saldoElement.classList.add('negative');
-            } else {
-                saldoElement.classList.add('neutral');
-            }
+            if (summary.saldoLiquidoMes > 0) saldoElement.classList.add('positive');
+            else if (summary.saldoLiquidoMes < 0) saldoElement.classList.add('negative');
+            else saldoElement.classList.add('neutral');
         }
 
-        // Função para renderizar saldos das contas
         function renderAccountBalances(accounts) {
             const container = document.getElementById('account-balances');
-
             if (!accounts || accounts.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-coins"></i>
-                        <div>Nenhuma conta encontrada</div>
-                    </div>
-                `;
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-coins"></i><div>Nenhuma conta encontrada</div></div>`;
                 return;
             }
-
             container.innerHTML = accounts.map(account => {
                 const initials = account.nomeOriginal.substring(0, 2).toUpperCase();
-                return `
-                    <div class="account-item">
-                        <div class="account-info">
-                            <div class="account-avatar">${initials}</div>
-                            <div>
-                                <div class="account-name">${account.nomeOriginal}</div>
-                                <div class="account-type">${account.tipo === 'conta corrente' ? 'Conta Corrente' : 'Dinheiro Físico'}</div>
-                            </div>
-                        </div>
-                        <div class="account-balance ${account.saldo >= 0 ? 'positive' : 'negative'}">
-                            ${formatCurrency(account.saldo)}
-                        </div>
-                    </div>
-                `;
+                return `<div class="account-item"><div class="account-info"><div class="account-avatar">${initials}</div><div><div class="account-name">${account.nomeOriginal}</div><div class="account-type">${account.tipo === 'conta corrente' ? 'Conta Corrente' : 'Dinheiro Físico'}</div></div></div><div class="account-balance ${account.saldo >= 0 ? 'positive' : 'negative'}">${formatCurrency(account.saldo)}</div></div>`;
             }).join('');
         }
 
-        // Função para renderizar cartões de crédito
         function renderCreditCards(cards) {
             const container = document.getElementById('credit-cards');
-
             if (!cards || cards.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-credit-card"></i>
-                        <div>Nenhum cartão encontrado</div>
-                    </div>
-                `;
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-credit-card"></i><div>Nenhum cartão encontrado</div></div>`;
                 return;
             }
-
             container.innerHTML = cards.map(card => {
-                // CORREÇÃO AQUI: Usar 'faturaAtual' para o cálculo da porcentagem e para o valor exibido
-                const valorExibido = card.faturaAtual; 
+                const valorExibido = card.faturaAtual;
                 const utilizacao = card.limite > 0 ? (valorExibido / card.limite) * 100 : 0;
                 const isHighUsage = utilizacao > 80;
-
-                return `
-                    <div class="credit-card">
-                        <div class="card-header-info">
-                            <div class="card-name">${card.nomeOriginal}</div>
-                            <div class="card-limit">Limite: ${formatCurrency(card.limite)}</div>
-                        </div>
-                        <div class="usage-bar">
-                            <div class="usage-fill ${isHighUsage ? 'high' : ''}"
-                                 style="width: ${Math.min(utilizacao, 100)}%"></div>
-                        </div>
-                        <div class="usage-info">
-                            <span class="usage-percentage">${utilizacao.toFixed(1)}% utilizado</span>
-                            <span class="usage-amount ${valorExibido > card.limite ? 'negative' : ''}">${formatCurrency(valorExibido)}</span>
-                        </div>
-                    </div>
-                `;
+                return `<div class="credit-card"><div class="card-header-info"><div class="card-name">${card.nomeOriginal}</div><div class="card-limit">Limite: ${formatCurrency(card.limite)}</div></div><div class="usage-bar"><div class="usage-fill ${isHighUsage ? 'high' : ''}" style="width: ${Math.min(utilizacao, 100)}%"></div></div><div class="usage-info"><span class="usage-percentage">${utilizacao.toFixed(1)}% utilizado</span><span class="usage-amount ${valorExibido > card.limite ? 'negative' : ''}">${formatCurrency(valorExibido)}</span></div></div>`;
             }).join('');
         }
 
-        // CORRIGIDO: Função para renderizar transações recentes (AGORA COM BOTÕES DE AÇÃO)
         function renderRecentTransactions(transactions) {
             const container = document.getElementById('recent-transactions');
-
             if (!transactions || transactions.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-history"></i>
-                        <div>Nenhuma transação encontrada</div>
-                    </div>
-                `;
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-history"></i><div>Nenhuma transação encontrada</div></div>`;
                 return;
             }
-
-            container.innerHTML = transactions.map(transaction => `
-                <div class="transaction-item" data-id="${transaction.id}">
-                    <div class="transaction-icon ${transaction.tipo.toLowerCase()}">
-                        <i class="fas fa-${transaction.tipo === 'Receita' ? 'arrow-up' : 'arrow-down'}"></i>
-                    </div>
-                    <div class="transaction-details">
-                        <div class="transaction-desc">${transaction.descricao}</div>
-                        <div class="transaction-meta">
-                            ${transaction.data} • ${transaction.categoria} • ${transaction.conta}
-                        </div>
-                    </div>
-                    <div class="transaction-amount ${transaction.tipo === 'Receita' ? 'positive' : 'negative'}">
-                        ${transaction.tipo === 'Receita' ? '+' : '-'}${formatCurrency(Math.abs(transaction.valor))}
-                    </div>
-                    <div class="transaction-actions">
-                        <button class="edit-transaction-btn" data-id="${transaction.id}" title="Editar Lançamento">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="delete-transaction-btn" data-id="${transaction.id}" title="Excluir Lançamento">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-
-            // Adicionar event listeners aos novos botões
-            document.querySelectorAll('.edit-transaction-btn').forEach(button => {
-                button.addEventListener('click', (event) => {
-                    const transactionId = event.currentTarget.dataset.id;
-                    // CORRIGIDO: Procurar na variável global 'allTransactions'
-                    const transactionToEdit = allTransactions.find(t => t.id === transactionId);
-                    if (transactionToEdit) {
-                        openEditTransactionModal(transactionToEdit);
-                    } else {
-                        console.error(`Transação com ID ${transactionId} não encontrada em allTransactions.`);
-                        showFeedback('Erro: Não foi possível encontrar os dados desta transação para editar.', 'error');
-                    }
-                });
-            });
-
-            document.querySelectorAll('.delete-transaction-btn').forEach(button => {
-                button.addEventListener('click', (event) => {
-                    const transactionId = event.currentTarget.dataset.id;
-                    confirmDeleteTransaction(transactionId);
-                });
-            });
+            container.innerHTML = transactions.map(transaction => `<div class="transaction-item" data-id="${transaction.id}"><div class="transaction-icon ${transaction.tipo.toLowerCase()}"><i class="fas fa-${transaction.tipo === 'Receita' ? 'arrow-up' : 'arrow-down'}"></i></div><div class="transaction-details"><div class="transaction-desc">${transaction.descricao}</div><div class="transaction-meta">${transaction.data} • ${transaction.categoria} • ${transaction.conta}</div></div><div class="transaction-amount ${transaction.tipo === 'Receita' ? 'positive' : 'negative'}">${transaction.tipo === 'Receita' ? '+' : '-'}${formatCurrency(Math.abs(transaction.valor))}</div><div class="transaction-actions"><button class="edit-transaction-btn" data-id="${transaction.id}" title="Editar Lançamento"><i class="fas fa-edit"></i></button><button class="delete-transaction-btn" data-id="${transaction.id}" title="Excluir Lançamento"><i class="fas fa-trash-alt"></i></button></div></div>`).join('');
+            document.querySelectorAll('.edit-transaction-btn').forEach(button => button.addEventListener('click', (event) => { const transactionId = event.currentTarget.dataset.id; const transactionToEdit = allTransactions.find(t => t.id === transactionId); if (transactionToEdit) openEditTransactionModal(transactionToEdit); else showFeedback('Erro: Não foi possível encontrar os dados desta transação para editar.', 'error'); }));
+            document.querySelectorAll('.delete-transaction-btn').forEach(button => button.addEventListener('click', (event) => confirmDeleteTransaction(event.currentTarget.dataset.id)));
         }
 
-        // Função para renderizar contas a pagar
         function renderBillsToPay(bills) {
             const container = document.getElementById('bills-to-pay');
-
             if (!bills || bills.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-calendar-check"></i>
-                        <div>Nenhuma conta pendente</div>
-                    </div>
-                `;
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-calendar-check"></i><div>Nenhuma conta pendente</div></div>`;
                 return;
             }
-
-            container.innerHTML = bills.map(bill => `
-                <div class="bill-item">
-                    <div class="bill-info">
-                        <div class="bill-desc">${bill.descricao}</div>
-                        <div class="bill-due">Vencimento: ${bill.dataVencimento}</div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div class="bill-amount">${formatCurrency(bill.valor)}</div>
-                        <span class="status-badge status-${bill.status.toLowerCase()}">${bill.status}</span>
-                    </div>
-                </div>
-            `).join('');
+            container.innerHTML = bills.map(bill => `<div class="bill-item"><div class="bill-info"><div class="bill-desc">${bill.descricao}</div><div class="bill-due">Vencimento: ${bill.dataVencimento}</div></div><div style="text-align: right;"><div class="bill-amount">${formatCurrency(bill.valor)}</div><span class="status-badge status-${bill.status.toLowerCase()}">${bill.status}</span></div></div>`).join('');
         }
 
-        // Função para renderizar progresso das metas
         function renderGoalsProgress(goals) {
             const container = document.getElementById('goals-progress');
-
             if (!goals || goals.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-target"></i>
-                        <div>Nenhuma meta definida</div>
-                    </div>
-                `;
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-target"></i><div>Nenhuma meta definida</div></div>`;
                 return;
             }
-
-            container.innerHTML = goals.map(goal => `
-                <div class="progress-item">
-                    <div class="progress-header">
-                        <span class="progress-label">
-                            ${goal.icon ? goal.icon + ' ' : ''}${goal.categoria} - ${goal.subcategoria}
-                        </span>
-                        <span class="progress-percentage">${goal.percentage.toFixed(1)}%</span>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill ${goal.percentage > 100 ? 'over-budget' : ''}"
-                             style="width: ${Math.min(goal.percentage, 100)}%"></div>
-                    </div>
-                    <div class="progress-values">
-                        <span>${formatCurrency(goal.gasto)}</span>
-                        <span>${formatCurrency(goal.meta)}</span>
-                    </div>
-                </div>
-            `).join('');
+            container.innerHTML = goals.map(goal => `<div class="progress-item"><div class="progress-header"><span class="progress-label">${goal.icon ? goal.icon + ' ' : ''}${goal.categoria} - ${goal.subcategoria}</span><span class="progress-percentage">${goal.percentage.toFixed(1)}%</span></div><div class="progress-bar"><div class="progress-fill ${goal.percentage > 100 ? 'over-budget' : ''}" style="width: ${Math.min(goal.percentage, 100)}%"></div></div><div class="progress-values"><span>${formatCurrency(goal.gasto)}</span><span>${formatCurrency(goal.meta)}</span></div></div>`).join('');
         }
 
-        // Function to render the expenses bar chart with datalabels
         function renderExpenseChart(expensesByCategory) {
             const chartCanvas = document.getElementById('expenses-chart');
             const emptyState = document.getElementById('expenses-chart-empty');
             const chartContainer = document.getElementById('expenses-chart-section').querySelector('.chart-container');
-
             if (!expensesByCategory || expensesByCategory.length === 0 || expensesByCategory.every(item => item.value === 0)) {
                 chartCanvas.style.display = 'none';
                 emptyState.style.display = 'block';
                 chartContainer.style.height = 'auto';
                 return;
-            } else {
-                chartCanvas.style.display = 'block';
-                emptyState.style.display = 'none';
             }
-
+            chartCanvas.style.display = 'block';
+            emptyState.style.display = 'none';
             const sortedData = [...expensesByCategory].sort((a, b) => b.value - a.value);
-
             const categories = sortedData.map(item => item.category);
             const values = sortedData.map(item => item.value);
             const icons = sortedData.map(item => item.icon);
-
-            const categoryHeight = 35;
-            const minChartHeight = 300; // Adjusted for mobile
-            const dynamicHeight = Math.max(minChartHeight, categories.length * categoryHeight);
+            const dynamicHeight = Math.max(300, categories.length * 35);
             chartContainer.style.height = `${dynamicHeight}px`;
-
-            let yAxisFontSize = 11;
-            if (categories.length > 10) {
-                yAxisFontSize = 10;
-            }
-            if (categories.length > 15) {
-                yAxisFontSize = 9;
-            }
-
-            const backgroundColors = [
-                '#8B5CF6', '#3B82F6', '#14B8A6', '#10B981', '#F59E0B', '#EF4444',
-                '#6366F1', '#EC4899', '#F97316', '#A855F7', '#06B6D4', '#F43F5E'
-            ];
-            const borderColors = categories.map((_, i) => backgroundColors[i % backgroundColors.length] + 'B3');
-
-            const chartData = {
-                labels: categories.map((cat, index) => icons[index] ? `${icons[index]} ${cat}` : cat),
-                datasets: [{
-                    data: values,
-                    backgroundColor: backgroundColors.slice(0, categories.length),
-                    borderColor: borderColors.slice(0, categories.length),
-                    borderWidth: 1
-                }]
-            };
-
-            const chartOptions = {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                // NOVO: Adiciona o evento de clique ao gráfico
-                onClick: (event, elements) => {
-                    if (elements.length > 0) {
-                        const chartElement = elements[0];
-                        const index = chartElement.index;
-                        const categoryLabelWithIcon = expensesChartInstance.data.labels[index];
-                        
-                        // Remove o emoji do label para obter o nome limpo da categoria
-                        const cleanCategoryName = categoryLabelWithIcon.replace(/(\p{Emoji}|\p{Emoji_Modifier_Base}|\p{Emoji_Component}|\p{Emoji_Modifier}|\p{Emoji_Presentation})\s*/u, '').trim();
-
-                        const selectedMonth = parseInt(document.getElementById('month-select').value) + 1;
-                        const selectedYear = parseInt(document.getElementById('year-input').value);
-
-                        // Mostra o modal de detalhes com um estado de carregamento
-                        const categoryModal = document.getElementById('categoryDetailModal');
-                        categoryModal.classList.add('show');
-                        document.getElementById('category-modal-loading').style.display = 'flex';
-                        document.getElementById('category-transactions-list').innerHTML = '';
-                        document.getElementById('categoryModalTitle').textContent = `Transações de ${cleanCategoryName}`;
-
-                        // Chama a nova função do lado do servidor para buscar as transações
-                        if (typeof google !== 'undefined' && google.script && google.script.run) {
-                            google.script.run
-                                .withSuccessHandler(function(transactions) {
-                                    document.getElementById('category-modal-loading').style.display = 'none';
-                                    populateCategoryModal(transactions);
-                                })
-                                .withFailureHandler(function(error) {
-                                    document.getElementById('category-modal-loading').style.display = 'none';
-                                    document.getElementById('category-transactions-list').innerHTML = `<div class="error-message">Erro ao buscar transações.</div>`;
-                                    console.error("Erro ao buscar transações da categoria:", error);
-                                })
-                                .getTransactionsByCategory(cleanCategoryName, selectedMonth, selectedYear);
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.label || '';
-                                label = label.replace(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g, '').trim();
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.x !== null) {
-                                    label += formatCurrency(context.parsed.x);
-                                }
-                                return label;
-                            }
-                        },
-                        titleFont: {
-                            family: 'Inter'
-                        },
-                        bodyFont: {
-                            family: 'Inter'
-                        },
-                        backgroundColor: 'var(--bg-card)',
-                        titleColor: '#F8FAFC',
-                        bodyColor: '#CBD5E1',
-                        borderColor: 'var(--border-color)',
-                        borderWidth: 1
-                    },
-                    datalabels: {
-                        color: '#F8FAFC',
-                        anchor: 'end',
-                        align: 'end',
-                        offset: 4,
-                        font: {
-                            weight: 'bold',
-                            size: 12,
-                            family: 'Inter'
-                        },
-                        formatter: (value, ctx) => {
-                            if (value > 0) { // Only display labels for values greater than 0
-                                return formatCurrency(value);
-                            }
-                            return ''; // Hide label if value is 0
-                        },
-                        textShadowBlur: 5,
-                        textShadowColor: 'rgba(0, 0, 0, 0.5)',
-                        display: function(context) {
-                            const dataset = context.dataset;
-                            const value = dataset.data[context.dataIndex];
-                            const chart = context.chart;
-                            const meta = chart.getDatasetMeta(context.datasetIndex);
-                            const bar = meta.data[context.dataIndex];
-                            const barWidth = bar.width || (bar.x - bar.base);
-                            return value > 0 && barWidth > 20; // Ensure value is positive and bar is wide enough
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: '#CBD5E1',
-                            font: {
-                                family: 'Inter'
-                            },
-                            callback: function(value, index, values) {
-                                return formatCurrency(value);
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(71, 85, 105, 0.3)' /* Cor da grade mais clara */
-                        },
-                        border: {
-                            color: 'var(--border-color)'
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            color: '#F8FAFC',
-                            font: {
-                                family: 'Inter',
-                                size: yAxisFontSize
-                            }
-                        },
-                        grid: {
-                            display: false
-                        },
-                        border: {
-                            color: 'var(--border-color)'
-                        }
-                    }
-                }
-            };
-
-            if (expensesChartInstance) {
-                expensesChartInstance.destroy();
-            }
-            expensesChartInstance = new Chart(chartCanvas, {
-                type: 'bar',
-                data: chartData,
-                options: chartOptions
-            });
+            let yAxisFontSize = categories.length > 15 ? 9 : (categories.length > 10 ? 10 : 11);
+            const backgroundColors = ['#8B5CF6', '#3B82F6', '#14B8A6', '#10B981', '#F59E0B', '#EF4444', '#6366F1', '#EC4899', '#F97316', '#A855F7', '#06B6D4', '#F43F5E'];
+            const chartData = { labels: categories.map((cat, index) => icons[index] ? `${icons[index]} ${cat}` : cat), datasets: [{ data: values, backgroundColor: backgroundColors.slice(0, categories.length), borderWidth: 1 }] };
+            const chartOptions = { indexAxis: 'y', responsive: true, maintainAspectRatio: false, onClick: (event, elements) => { if (elements.length > 0) { const index = elements[0].index; const categoryLabelWithIcon = expensesChartInstance.data.labels[index]; const cleanCategoryName = categoryLabelWithIcon.replace(/(\p{Emoji}|\p{Emoji_Modifier_Base}|\p{Emoji_Component}|\p{Emoji_Modifier}|\p{Emoji_Presentation})\s*/u, '').trim(); const selectedMonth = parseInt(document.getElementById('month-select').value) + 1; const selectedYear = parseInt(document.getElementById('year-input').value); const categoryModal = document.getElementById('categoryDetailModal'); categoryModal.classList.add('show'); document.getElementById('category-modal-loading').style.display = 'flex'; document.getElementById('category-transactions-list').innerHTML = ''; document.getElementById('categoryModalTitle').textContent = `Transações de ${cleanCategoryName}`; if (typeof google !== 'undefined' && google.script && google.script.run) { google.script.run.withSuccessHandler(transactions => { document.getElementById('category-modal-loading').style.display = 'none'; populateCategoryModal(transactions); }).withFailureHandler(error => { document.getElementById('category-modal-loading').style.display = 'none'; document.getElementById('category-transactions-list').innerHTML = `<div class="error-message">Erro ao buscar transações.</div>`; console.error("Erro:", error); }).getTransactionsByCategory(cleanCategoryName, selectedMonth, selectedYear); } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { let label = context.label || ''; label = label.replace(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g, '').trim(); if (label) { label += ': '; } if (context.parsed.x !== null) { label += formatCurrency(context.parsed.x); } return label; } } }, datalabels: { color: '#F8FAFC', anchor: 'end', align: 'end', offset: 4, font: { weight: 'bold', size: 12, family: 'Inter' }, formatter: (value, ctx) => value > 0 ? formatCurrency(value) : '', display: function(context) { const bar = context.chart.getDatasetMeta(context.datasetIndex).data[context.dataIndex]; return (bar.width || (bar.x - bar.base)) > 20; } } }, scales: { x: { ticks: { color: '#CBD5E1', font: { family: 'Inter' }, callback: value => formatCurrency(value) }, grid: { color: 'rgba(71, 85, 105, 0.3)' }, border: { color: 'var(--border-color)' } }, y: { ticks: { color: '#F8FAFC', font: { family: 'Inter', size: yAxisFontSize } }, grid: { display: false }, border: { color: 'var(--border-color)' } } } };
+            if (expensesChartInstance) expensesChartInstance.destroy();
+            expensesChartInstance = new Chart(chartCanvas, { type: 'bar', data: chartData, options: chartOptions });
         }
 
-        // Função para renderizar progresso do orçamento
         function renderBudgetProgress(budget) {
             const chartCanvas = document.getElementById('budget-chart');
-            const chartContainer = document.getElementById('budget-progress-section').querySelector('.chart-container'); // Corrected selector
             const emptyState = document.getElementById('budget-chart-empty');
-
+            const chartContainer = document.getElementById('budget-chart-container');
             if (!budget || budget.length === 0 || budget.every(item => item.orcado === 0 && item.gasto === 0)) {
                 chartCanvas.style.display = 'none';
                 emptyState.style.display = 'block';
                 chartContainer.style.height = 'auto';
                 return;
-            } else {
-                chartCanvas.style.display = 'block';
-                emptyState.style.display = 'none';
             }
-
-            const sortedBudget = [...budget].sort((a, b) => b.orcado - a.orcado);
-
-            const categories = sortedBudget.map(item => item.categoria);
-            const orcadoValues = sortedBudget.map(item => item.orcado);
-            const gastoValues = sortedBudget.map(item => item.gasto);
-            const icons = sortedBudget.map(item => item.icon);
-
-            const categoryHeight = 35;
-            const minChartHeight = 300; // Adjusted for mobile
-            const dynamicHeight = Math.max(minChartHeight, categories.length * categoryHeight);
+            chartCanvas.style.display = 'block';
+            emptyState.style.display = 'none';
+            
+            const categoryHeight = 50;
+            const minChartHeight = 300;
+            const dynamicHeight = Math.max(minChartHeight, budget.length * categoryHeight);
             chartContainer.style.height = `${dynamicHeight}px`;
 
-            let yAxisFontSize = 11;
-            if (categories.length > 10) {
-                yAxisFontSize = 10;
-            }
-            if (categories.length > 15) {
-                yAxisFontSize = 9;
-            }
-
+            const sortedBudget = [...budget].sort((a, b) => b.orcado - a.orcado);
             const chartData = {
-                labels: categories.map((cat, index) => icons[index] ? `${icons[index]} ${cat}` : cat),
+                labels: sortedBudget.map(item => item.icon ? `${item.icon} ${item.categoria}` : item.categoria),
                 datasets: [
-                    {
-                        label: 'Orçado',
-                        data: orcadoValues,
+                    { 
+                        label: 'Orçado', 
+                        data: sortedBudget.map(item => item.orcado), 
                         backgroundColor: 'rgba(59, 130, 246, 0.7)',
                         borderColor: 'rgba(59, 130, 246, 1)',
-                        borderWidth: 1
+                        borderWidth: 1,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.6
                     },
-                    {
-                        label: 'Gasto',
-                        data: gastoValues,
+                    { 
+                        label: 'Gasto', 
+                        data: sortedBudget.map(item => item.gasto), 
                         backgroundColor: 'rgba(20, 184, 166, 0.7)',
                         borderColor: 'rgba(20, 184, 166, 1)',
-                        borderWidth: 1
+                        borderWidth: 1,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.6
                     }
                 ]
             };
-
-            const chartOptions = {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            color: '#F8FAFC',
-                            font: {
-                                family: 'Inter',
-                                size: 14,
-                                weight: '500'
-                            }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                label = label.replace(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g, '').trim();
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.parsed.x !== null) {
-                                    label += formatCurrency(context.parsed.x);
-                                }
-                                return label;
-                            }
-                        },
-                        titleFont: {
-                            family: 'Inter'
-                        },
-                        bodyFont: {
-                            family: 'Inter'
-                        },
-                        backgroundColor: 'var(--bg-card)',
-                        titleColor: '#F8FAFC',
-                        bodyColor: '#CBD5E1',
-                        borderColor: 'var(--border-color)',
-                        borderWidth: 1
+            const chartOptions = { 
+                indexAxis: 'y', 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { 
+                        display: true, 
+                        position: 'top', 
+                        labels: { color: '#F8FAFC' } 
+                    }, 
+                    tooltip: { 
+                        callbacks: { 
+                            label: context => `${context.dataset.label}: ${formatCurrency(context.parsed.x)}` 
+                        } 
                     },
                     datalabels: {
-                        color: '#F8FAFC',
-                        anchor: 'center',
-                        align: 'center',
-                        offset: 0,
-                        font: {
-                            weight: 'bold',
-                            size: 12,
-                            family: 'Inter'
-                        },
-                        formatter: (value, ctx) => {
-                            if (value > 0) { // Only display labels for values greater than 0
-                                return formatCurrency(value);
-                            }
-                            return ''; // Hide label if value is 0
-                        },
-                        textShadowBlur: 5,
-                        textShadowColor: 'rgba(0, 0, 0, 0.5)',
-                        display: function(context) {
-                            const dataset = context.dataset;
-                            const value = dataset.data[context.dataIndex];
-                            const chart = context.chart;
-                            const meta = chart.getDatasetMeta(context.datasetIndex);
-                            const bar = meta.data[context.dataIndex];
-                            const barWidth = bar.width || (bar.x - bar.base);
-                            return value > 0 && barWidth > 20; // Ensure value is positive and bar is wide enough
-                        }
+                        display: false
                     }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: '#CBD5E1',
-                            font: {
-                                family: 'Inter'
-                            },
-                            callback: function(value, index, values) {
-                                return formatCurrency(value);
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(71, 85, 105, 0.3)'
-                        },
-                        border: {
-                            color: 'var(--border-color)'
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            color: '#F8FAFC',
-                            font: {
-                                family: 'Inter',
-                                size: yAxisFontSize
-                            }
-                        },
-                        grid: {
-                            display: false
-                        },
-                        border: {
-                            color: 'var(--border-color)'
-                        }
-                    }
-                }
+                }, 
+                scales: { 
+                    x: { 
+                        stacked: false,
+                        ticks: { color: '#CBD5E1', callback: value => formatCurrency(value) },
+                        grid: { color: 'rgba(71, 85, 105, 0.3)' }
+                    }, 
+                    y: { 
+                        stacked: false,
+                        ticks: { color: '#F8FAFC' } 
+                    } 
+                } 
             };
-
-            if (budgetChartInstance) {
-                budgetChartInstance.destroy();
-            }
-            budgetChartInstance = new Chart(chartCanvas, {
-                type: 'bar',
-                data: chartData,
-                options: chartOptions
-            });
+            if (budgetChartInstance) budgetChartInstance.destroy();
+            budgetChartInstance = new Chart(chartCanvas, { type: 'bar', data: chartData, options: chartOptions });
         }
         
+        // ######################################################
+        // ##      INÍCIO DA ATUALIZAÇÃO: NOVA FUNÇÃO JS         ##
+        // ######################################################
+        function renderNeedsWantsChart(summary, totalReceitas) {
+            const chartCanvas = document.getElementById('needs-wants-chart');
+            const emptyState = document.getElementById('needs-wants-empty');
+            if (!summary || (summary.necessidades === 0 && summary.desejos === 0 && summary.naoClassificado === 0)) {
+                chartCanvas.style.display = 'none';
+                emptyState.style.display = 'flex';
+                return;
+            }
+            chartCanvas.style.display = 'block';
+            emptyState.style.display = 'none';
+
+            const poupanca = Math.max(0, totalReceitas - (summary.necessidades + summary.desejos + summary.naoClassificado));
+            const chartData = {
+                labels: ['Necessidades', 'Desejos', 'Poupança', 'Não Classificado'],
+                datasets: [{ 
+                    data: [summary.necessidades, summary.desejos, poupanca, summary.naoClassificado],
+                    // ######################################################
+                    // ##      INÍCIO DA ATUALIZAÇÃO: NOVAS CORES          ##
+                    // ######################################################
+                    backgroundColor: ['#3B82F6', '#8B5CF6', '#10B981', '#94A3B8'], // Azul, Roxo, Verde, Cinza
+                    // ######################################################
+                    // ##       FIM DA ATUALIZAÇÃO: NOVAS CORES            ##
+                    // ######################################################
+                    borderColor: 'var(--bg-card)', 
+                    borderWidth: 4, 
+                    hoverOffset: 8 
+                }]
+            };
+            if (needsWantsChartInstance) needsWantsChartInstance.destroy();
+            needsWantsChartInstance = new Chart(chartCanvas, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: '#F8FAFC', font: { family: 'Inter', size: 12 }, padding: 20 } }, tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) label += ': '; const value = context.parsed; label += formatCurrency(value); if (totalReceitas > 0) { const percentage = ((value / totalReceitas) * 100).toFixed(1); label += ` (${percentage}%)`; } return label; } } }, datalabels: { display: false } } } });
+        }
+        // ######################################################
+        // ##       FIM DA ATUALIZAÇÃO: NOVA FUNÇÃO JS         ##
+        // ######################################################
+
+
+
         // Função principal para carregar dados do dashboard
         function loadDashboardData() {
             showLoading();
-
             const selectedMonth = parseInt(document.getElementById('month-select').value);
             const selectedYear = parseInt(document.getElementById('year-input').value);
-
             if (typeof google !== 'undefined' && google.script && google.script.run) {
                 google.script.run
                     .withSuccessHandler(function(data) {
@@ -2351,15 +1979,13 @@
             }
         }
 
-        // Função de sucesso
+        // Função de sucesso ATUALIZADA
         function onSuccess(data, selectedMonth, selectedYear) {
             hideLoading();
-
             allAccounts = data.accounts || [];
             allCategories = data.categories || {};
             allPaymentMethods = data.paymentMethods || [];
-            allTransactions = data.recentTransactions || []; // CORRIGIDO: Sempre usar a variável global
-
+            allTransactions = data.recentTransactions || [];
             renderSummary(data.summary);
             renderAccountBalances(data.accountBalances);
             renderCreditCards(data.creditCardSummaries);
@@ -2368,13 +1994,14 @@
             renderGoalsProgress(data.goalsProgress);
             renderBudgetProgress(data.budgetProgress);
             renderExpenseChart(data.expensesByCategory);
-            updateActiveNavLink();
+            
+            // <-- NOVA CHAMADA DE RENDERIZAÇÃO
+            renderNeedsWantsChart(data.needsWantsSummary, data.summary.totalReceitas); 
+            
             updateLastUpdateTime(selectedMonth, selectedYear);
-
             populateAccountsDropdown();
         }
 
-        // Função de erro
         function onFailure(error) {
             hideLoading();
             showError('Não foi possível carregar os dados do dashboard. Tente novamente. Se o problema persistir, contate o administrador.');
