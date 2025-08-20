@@ -8,6 +8,7 @@
 const TELEGRAM_TOKEN_PROPERTY_KEY = 'TELEGRAM_TOKEN';
 const ADMIN_CHAT_ID_PROPERTY_KEY = 'ADMIN_CHAT_ID';
 const WEB_APP_URL_PROPERTY_KEY = 'WEB_APP_URL'; // NOVO: Chave para a URL do Web App
+const SPEECH_API_KEY_PROPERTY_KEY = 'SPEECH_API_KEY'; // <-- ADICIONADO
 
 
 /**
@@ -98,7 +99,7 @@ const HEADERS = {
   [SHEET_CONTAS]: ["Nome da Conta", "Tipo", "Banco", "Saldo Inicial", "Saldo Atual", "Limite", "Dia de Vencimento", "Status", "Categoria", "Dia de Fechamento", "Tipo de Fechamento", "Dias Antes Vencimento", "Conta Pai Agrupador", "Pessoa"],
   [SHEET_USUARIOS]: ["ID Usuario Telegram", "Nome", "Permissoes", "Ativo"],
   [SHEET_CONFIGURACOES]: ["chave", "valor", "NomeUsuario", "grupo"],
-  [SHEET_CATEGORIAS]: ["Categoria", "Subcategoria", "Tipo", "Palavra-chave"], // Seus cabeçalhos podem variar
+  [SHEET_CATEGORIAS]: ["Categoria", "Subcategoria", "Tipo", "Tipo de Gasto"], // Seus cabeçalhos podem variar
   [SHEET_METAS]: ["Categoria", "Subcategoria", "janeiro/2025", "Total Geral"], // Exemplo, ajuste conforme sua planilha
   [SHEET_FATURAS]: ["ID Fatura", "Cartao", "Mes Referencia", "Data Fechamento", "Data Vencimento", "Valor Total", "Valor Pago", "Status", "ID Transacao Pagamento"], // Seus cabeçalhos podem variar
   [SHEET_ORCAMENTO]: ["ID Orcamento", "Mes referencia", "Categoria", "Valor Orcado", "Valor Gasto"], // Seus cabeçalhos podem variar
