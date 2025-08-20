@@ -52,30 +52,28 @@ function onInstall(e) {
 
 
 /**
- * **FUNÇÃO ATUALIZADA E CORRIGIDA**
+ * **FUNÇÃO ATUALIZADA**
  * Função principal que é acionada pelo webhook do Telegram.
- * A verificação da configuração guiada agora tem prioridade máxima e trata o /start inicial.
+ * O bloco try...catch agora usa a nova função centralizada handleError.
  * @param {Object} e O objeto de evento do webhook.
  */
 function doPost(e) {
-  // Adicione esta verificação logo no início da função
-  if (!isLicenseValid()) {
-    logToSheet("Acesso bloqueado via doPost: Licença inválida ou ausente.", "ERROR");
-    return; 
-  }
-   
-  // Bloco try...catch para capturar qualquer erro inesperado durante a execução.
+  let chatIdForError = null;
   try {
+    if (!isLicenseValid()) {
+      logToSheet("Acesso bloqueado via doPost: Licença inválida ou ausente.", "ERROR");
+      return; 
+    }
+   
     if (!e || !e.postData || !e.postData.contents) {
-      logToSheet("doPost recebido com dados vazios ou invalidos (e.postData.contents esta vazio). Ignorando.", "WARN");
+      logToSheet("doPost recebido com dados vazios ou invalidos.", "WARN");
       return;
     }
 
     currentLogLevel = getLogLevelConfig();
-    logToSheet(`Nível de log configurado para esta execução: ${currentLogLevel}`, "INFO");
-
     const data = JSON.parse(e.postData.contents || '{}');
     const chatId = data.message?.chat?.id || data.callback_query?.message?.chat?.id;
+    chatIdForError = chatId; // Armazena o chatId para usar no bloco catch
     let textoRecebido = (data.message?.text || data.callback_query?.data || "").trim();
 
     if (!chatId) {
@@ -632,7 +630,7 @@ function onOpen() {
     }
     menu.addToUi();
   } catch (e) {
-    logToSheet(`Erro em onOpen (provavelmente autorização pendente): ${e.message}`, "INFO");
+    handleError(e, "onOpen");
     ui.createMenu('Boas Contas')
       .addItem('⚠️ Ativar Produto', 'activateProduct')
       .addToUi();
@@ -726,22 +724,24 @@ function showSetupUI() {
 
 /**
  * **FUNÇÃO ATUALIZADA**
- * Agora também atualiza a configuração do admin na planilha.
+ * Agora também salva a chave da API de Speech-to-Text.
  */
-function saveCredentialsAndSetupWebhook(token, chatId, webAppUrl) {
+function saveCredentialsAndSetupWebhook(token, chatId, webAppUrl, speechApiKey) { // <-- PARÂMETRO ADICIONADO
   try {
     if (!token || !chatId || !webAppUrl) {
       throw new Error("O Token, o ID do Chat e a URL do App da Web são obrigatórios.");
     }
 
     const scriptProperties = PropertiesService.getScriptProperties();
-    scriptProperties.setProperty(TELEGRAM_TOKEN_PROPERTY_KEY, token);
-    scriptProperties.setProperty(ADMIN_CHAT_ID_PROPERTY_KEY, chatId);
-    scriptProperties.setProperty(WEB_APP_URL_PROPERTY_KEY, webAppUrl);
+    scriptProperties.setProperties({
+      [TELEGRAM_TOKEN_PROPERTY_KEY]: token,
+      [ADMIN_CHAT_ID_PROPERTY_KEY]: chatId,
+      [WEB_APP_URL_PROPERTY_KEY]: webAppUrl,
+      [SPEECH_API_KEY_PROPERTY_KEY]: speechApiKey || "" // <-- ADICIONADO (guarda vazio se não for fornecido)
+    });
     
-    logToSheet("Configurações de Token, Chat ID e URL salvas com sucesso.", "INFO");
+    logToSheet("Configurações de Token, Chat ID, URL e Chave de API salvas com sucesso.", "INFO");
 
-    // **NOVO PASSO:** Atualiza a aba 'Configuracoes' com o Chat ID do admin
     updateAdminConfig(chatId);
 
     const webhookResult = setupWebhook();
@@ -749,10 +749,7 @@ function saveCredentialsAndSetupWebhook(token, chatId, webAppUrl) {
     if (webhookResult && webhookResult.ok) {
         logToSheet("Configuração do Webhook concluída com sucesso.", "INFO");
         
-        const state = {
-          step: SETUP_STEPS.PENDING_START,
-          data: {}
-        };
+        const state = { step: SETUP_STEPS.PENDING_START, data: {} };
         setGuidedSetupState(chatId, state);
         logToSheet(`[Onboarding] Estado inicial PENDING_START definido para ${chatId}.`, "INFO");
 
@@ -767,6 +764,7 @@ function saveCredentialsAndSetupWebhook(token, chatId, webAppUrl) {
     return { success: false, message: e.message };
   }
 }
+
 
 
 /**
