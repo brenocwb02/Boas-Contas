@@ -409,8 +409,11 @@ function enviarSaldo(chatId, usuario) {
     logToSheet(`Saldo enviado para chatId: ${chatId}.`, "INFO");
 
   } catch (e) {
-    logToSheet(`ERRO FATAL ao construir ou enviar mensagem de saldo: ${e.message} na linha ${e.lineNumber}. Stack: ${e.stack}`, "ERROR");
-    enviarMensagemTelegram(chatId, "❌ Houve um erro inesperado ao gerar seu saldo. Por favor, tente novamente mais tarde.");
+    // Chamamos a função centralizada para registar o erro e notificar o utilizador.
+    handleError(e, `enviarSaldo para ${usuario}`, chatId);
+    // **CORREÇÃO CRÍTICA ADICIONADA AQUI**
+    // Adicionamos 'return' para parar a execução da função imediatamente.
+    return;
   }
 }
 
@@ -425,7 +428,7 @@ function enviarSaldo(chatId, usuario) {
  */
 function enviarAjuda(chatId) {
   const mensagem = `
-👋 *Bem-vindo ao Gasto Certo!*
+👋 *Bem-vindo ao Boas Contas!*
 
 Aqui está um guia rápido dos comandos. Use os botões abaixo para acesso rápido!
 
@@ -2146,118 +2149,199 @@ function enviarResumoPorPessoa(chatId, solicitante, usuarioAlvo, mes, ano) {
 }
 
 
+// ===================================================================================
+// SEÇÃO DE CHECK-UP FINANCEIRO (/saude)
+// ===================================================================================
+
 /**
- * CALCULA E ENVIA UM CHECK-UP DA SAÚDE FINANCEIRA DO MÊS ATUAL.
- * Analisa a taxa de poupança, rendimento comprometido e gasto diário.
- * @param {string} chatId O ID do chat do Telegram.
- * @param {string} usuario O nome do usuário.
+ * @private
+ * Calcula o fluxo de caixa do mês (receitas, despesas, necessidades, desejos).
+ * @param {Array<Array<any>>} transacoes - Dados da aba de transações.
+ * @param {Object} categoriasMap - Mapa de categorias gerado por getCategoriesMap.
+ * @param {number} mesAtual - O mês atual (0-11).
+ * @param {number} anoAtual - O ano atual.
+ * @returns {Object} Um objeto com os totais calculados.
  */
-function enviarSaudeFinanceira(chatId, usuario) {
-  logToSheet(`Iniciando Check-up Financeiro para ${usuario} (${chatId}).`, "INFO");
+function _calculateMonthlyFlow(transacoes, categoriasMap, mesAtual, anoAtual) {
+  let receitasMes = 0, despesasMes = 0, gastoNecessidades = 0, gastoDesejos = 0;
 
-  const hoje = new Date();
-  const mesAtual = hoje.getMonth();
-  const anoAtual = hoje.getFullYear();
-  const nomeMes = getNomeMes(mesAtual);
-
-  // Obter dados necessários
-  const transacoes = getSheetDataWithCache(SHEET_TRANSACOES, CACHE_KEY_TRANSACOES, 60); // Cache mais curto para dados voláteis
-  const contasAPagar = getSheetDataWithCache(SHEET_CONTAS_A_PAGAR, CACHE_KEY_CONTAS_A_PAGAR, 300);
-  
-  let receitasMes = 0;
-  let despesasMes = 0;
-
-  // 1. Calcular Receitas e Despesas do Mês
   for (let i = 1; i < transacoes.length; i++) {
     const linha = transacoes[i];
     const dataTransacao = parseData(linha[0]);
     
     if (dataTransacao && dataTransacao.getMonth() === mesAtual && dataTransacao.getFullYear() === anoAtual) {
       const tipo = (linha[4] || "").toLowerCase();
-      const categoria = normalizarTexto(linha[2]);
-      const subcategoria = normalizarTexto(linha[3]);
+      const categoria = linha[2];
+      const subcategoria = linha[3];
       const valor = parseBrazilianFloat(String(linha[5]));
 
-      // Ignorar transferências e pagamentos de fatura para um cálculo de fluxo de caixa real
-      const isIgnored = (categoria === "transferencias" && subcategoria === "entre contas") ||
-                        (categoria === "contas a pagar" && subcategoria === "pagamento de fatura");
+      const isIgnored = (normalizarTexto(categoria) === "transferencias" && normalizarTexto(subcategoria) === "entre contas") ||
+                        (normalizarTexto(categoria) === "contas a pagar" && normalizarTexto(subcategoria) === "pagamento de fatura");
 
       if (!isIgnored) {
         if (tipo === "receita") {
           receitasMes += valor;
         } else if (tipo === "despesa") {
           despesasMes += valor;
+          const categoriaInfo = categoriasMap[normalizarTexto(categoria)];
+          if (categoriaInfo && categoriaInfo.tipoGasto === 'necessidade') gastoNecessidades += valor;
+          else if (categoriaInfo && categoriaInfo.tipoGasto === 'desejo') gastoDesejos += valor;
         }
       }
     }
   }
+  return { receitasMes, despesasMes, gastoNecessidades, gastoDesejos };
+}
 
-  // 2. Calcular Rendimento Comprometido (Contas a Pagar + Faturas de Cartão)
+/**
+ * @private
+ * Calcula o total de contas a pagar recorrentes do mês.
+ * @param {Array<Array<any>>} contasAPagar - Dados da aba Contas_a_Pagar.
+ * @param {number} mesAtual - O mês atual (0-11).
+ * @param {number} anoAtual - O ano atual.
+ * @returns {number} O valor total das contas a pagar.
+ */
+function _calculateCommittedBills(contasAPagar, mesAtual, anoAtual) {
   let totalContasAPagarMes = 0;
   for (let i = 1; i < contasAPagar.length; i++) {
     const linha = contasAPagar[i];
-    const dataVencimento = parseData(linha[4]); // Coluna 'Data de Vencimento'
+    const dataVencimento = parseData(linha[4]);
     if (dataVencimento && dataVencimento.getMonth() === mesAtual && dataVencimento.getFullYear() === anoAtual) {
-      totalContasAPagarMes += parseBrazilianFloat(String(linha[3])); // Coluna 'Valor'
+      totalContasAPagarMes += parseBrazilianFloat(String(linha[3]));
     }
   }
-  
-  // Usar a função de saldo para obter as dívidas de cartão
+  return totalContasAPagarMes;
+}
+
+/**
+ * @private
+ * Obtém o valor total das faturas de cartão de crédito do ciclo atual.
+ * @returns {number} O valor total das faturas.
+ */
+function _getCreditCardBills() {
   atualizarSaldosDasContas();
   let totalFaturasPagar = 0;
   for (const nomeNormalizado in globalThis.saldosCalculados) {
       const infoConta = globalThis.saldosCalculados[nomeNormalizado];
       if (infoConta.tipo === "cartão de crédito" || infoConta.tipo === "fatura consolidada") {
-        totalFaturasPagar += infoConta.faturaAtual; // Usamos a fatura do ciclo atual
+        totalFaturasPagar += infoConta.faturaAtual;
       }
   }
+  return totalFaturasPagar;
+}
 
-  const rendimentoComprometidoTotal = totalContasAPagarMes + totalFaturasPagar;
+/**
+ * @private
+ * Formata a mensagem final do check-up financeiro.
+ * @param {Object} data - Um objeto com todos os dados calculados.
+ * @returns {string} A mensagem formatada para o Telegram.
+ */
+function _formatSaudeFinanceiraMessage(data) {
+  const { nomeMes, anoAtual, receitasMes, despesasMes, gastoNecessidades, gastoDesejos, rendimentoComprometidoTotal } = data;
 
-  // 3. Calcular os Indicadores
-  let taxaDePoupanca = 0;
-  if (receitasMes > 0) {
-    taxaDePoupanca = ((receitasMes - despesasMes) / receitasMes) * 100;
-  }
+  const saldoLiquido = receitasMes - despesasMes;
+  const taxaDePoupanca = receitasMes > 0 ? (saldoLiquido / receitasMes) * 100 : 0;
+  const percNecessidades = receitasMes > 0 ? (gastoNecessidades / receitasMes) * 100 : 0;
+  const percDesejos = receitasMes > 0 ? (gastoDesejos / receitasMes) * 100 : 0;
+  const percRendimentoComprometido = receitasMes > 0 ? (rendimentoComprometidoTotal / receitasMes) * 100 : 0;
+  const gastoDiarioMedio = despesasMes / (new Date()).getDate();
 
-  let percRendimentoComprometido = 0;
-  if (receitasMes > 0) {
-    percRendimentoComprometido = (rendimentoComprometidoTotal / receitasMes) * 100;
-  }
-  
-  const gastoDiarioMedio = despesasMes / hoje.getDate();
-
-  // 4. Formatar a Mensagem
   let mensagem = `🩺 *Check-up Financeiro de ${nomeMes} de ${anoAtual}*\n\n`;
 
-  // Taxa de Poupança
+  mensagem += `*📊 Análise de Gastos (vs. Rendimento)*\n`;
+  mensagem += `● *Necessidades:* ${percNecessidades.toFixed(0)}% (${formatCurrency(gastoNecessidades)})\n`;
+  mensagem += `● *Desejos:* ${percDesejos.toFixed(0)}% (${formatCurrency(gastoDesejos)})\n`;
+  mensagem += `● *Poupança:* ${taxaDePoupanca.toFixed(0)}% (${formatCurrency(saldoLiquido)})\n`;
+  mensagem += `_Meta ideal: 50% Necessidades, 30% Desejos, 20% Poupança._\n\n`;
+
   let emojiPoupanca = "🟠";
-  let textoPoupanca = `Você está a poupar ${taxaDePoupanca.toFixed(0)}% do que ganha.`;
-  if (taxaDePoupanca >= 20) {
-    emojiPoupanca = "🟢";
-    textoPoupanca += " Excelente!";
-  } else if (taxaDePoupanca < 0) {
-    emojiPoupanca = "🔴";
-    textoPoupanca = `Você está a gastar ${Math.abs(taxaDePoupanca).toFixed(0)}% a mais do que ganha. Atenção!`;
-  }
-  mensagem += `● *Taxa de Poupança:* ${emojiPoupanca} ${taxaDePoupanca.toFixed(0)}%\n_${escapeMarkdown(textoPoupanca)}_\n\n`;
+  if (taxaDePoupanca >= 20) emojiPoupanca = "🟢";
+  else if (taxaDePoupanca < 0) emojiPoupanca = "🔴";
+  mensagem += `● *Taxa de Poupança:* ${emojiPoupanca} ${taxaDePoupanca.toFixed(0)}%\n_${escapeMarkdown(`Você está a poupar ${taxaDePoupanca.toFixed(0)}% do que ganha.`)}_\n\n`;
 
-  // Rendimento Comprometido
   let emojiComprometido = "🟢";
-  let textoComprometido = `${percRendimentoComprometido.toFixed(0)}% do seu rendimento está alocado a faturas e contas a pagar.`;
-  if (percRendimentoComprometido > 50) {
-    emojiComprometido = "🔴";
-    textoComprometido += " Nível elevado, requer atenção.";
-  } else if (percRendimentoComprometido > 30) {
-    emojiComprometido = "🟠";
-  }
-  mensagem += `● *Rendimento Comprometido:* ${emojiComprometido} ${percRendimentoComprometido.toFixed(0)}%\n_${escapeMarkdown(textoComprometido)}_\n\n`;
+  if (percRendimentoComprometido > 50) emojiComprometido = "🔴";
+  else if (percRendimentoComprometido > 30) emojiComprometido = "🟠";
+  mensagem += `● *Rendimento Comprometido:* ${emojiComprometido} ${percRendimentoComprometido.toFixed(0)}%\n_${escapeMarkdown(`${percRendimentoComprometido.toFixed(0)}% do seu rendimento está alocado a faturas e contas a pagar.`)}_\n\n`;
 
-  // Gasto Diário Médio
   mensagem += `● *Gasto Diário Médio:* 💸 ${formatCurrency(gastoDiarioMedio)}\n_Até agora, este é o seu gasto médio por dia neste mês._`;
 
-  enviarMensagemTelegram(chatId, mensagem)
+  return mensagem;
 }
+
+/**
+ * **FUNÇÃO ATUALIZADA E ORGANIZADA**
+ * CALCULA E ENVIA UM CHECK-UP DA SAÚDE FINANCEIRA DO MÊS ATUAL.
+ * Agora inclui a análise de Necessidades vs. Desejos.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} usuario O nome do usuário.
+ */
+function enviarSaudeFinanceira(chatId, usuario) {
+  logToSheet(`Iniciando Check-up Financeiro para ${usuario} (${chatId}).`, "INFO");
+
+  try {
+    // 1. Obter Dados e Variáveis de Tempo
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth();
+    const anoAtual = hoje.getFullYear();
+    const transacoes = getSheetDataWithCache(SHEET_TRANSACOES, CACHE_KEY_TRANSACOES, 60);
+    const contasAPagar = getSheetDataWithCache(SHEET_CONTAS_A_PAGAR, CACHE_KEY_CONTAS_A_PAGAR, 300);
+    const categoriasMap = getCategoriesMap();
+
+    // 2. Calcular os Componentes Principais usando Funções Auxiliares
+    const { receitasMes, despesasMes, gastoNecessidades, gastoDesejos } = _calculateMonthlyFlow(transacoes, categoriasMap, mesAtual, anoAtual);
+    const totalContasAPagarMes = _calculateCommittedBills(contasAPagar, mesAtual, anoAtual);
+    const totalFaturasPagar = _getCreditCardBills();
+    const rendimentoComprometidoTotal = totalContasAPagarMes + totalFaturasPagar;
+
+    // 3. Montar o Pacote de Dados para a Mensagem
+    const messageData = {
+      nomeMes: getNomeMes(mesAtual),
+      anoAtual: anoAtual,
+      receitasMes,
+      despesasMes,
+      gastoNecessidades,
+      gastoDesejos,
+      rendimentoComprometidoTotal
+    };
+
+    // 4. Formatar e Enviar a Mensagem
+    const mensagem = _formatSaudeFinanceiraMessage(messageData);
+    enviarMensagemTelegram(chatId, mensagem);
+
+  } catch (e) {
+    handleError(e, `enviarSaudeFinanceira para ${usuario}`, chatId);
+  }
+}
+
+/**
+ * NOVA FUNÇÃO AUXILIAR
+ * Cria um mapa de categorias para fácil acesso ao tipo e tipo de gasto.
+ * @returns {Object} Um mapa no formato { 'nome_categoria_normalizado': { tipo: 'Despesa', tipoGasto: 'Necessidade' } }.
+ */
+function getCategoriesMap() {
+  const categoriasData = getSheetDataWithCache(SHEET_CATEGORIAS, CACHE_KEY_CATEGORIAS);
+  const map = {};
+  // Assumindo que o cabeçalho está na primeira linha
+  for (let i = 1; i < categoriasData.length; i++) {
+    const row = categoriasData[i];
+    const categoria = (row[0] || "").trim();
+    const tipo = (row[2] || "").toLowerCase().trim();
+    const tipoGasto = (row[3] || "").toLowerCase().trim(); // Nova coluna D
+    
+    if (categoria) {
+      const categoriaNormalizada = normalizarTexto(categoria);
+      if (!map[categoriaNormalizada]) {
+        map[categoriaNormalizada] = {
+          tipo: tipo,
+          tipoGasto: tipoGasto // 'necessidade' ou 'desejo'
+        };
+      }
+    }
+  }
+  return map;
+}
+
 
 
 /**
