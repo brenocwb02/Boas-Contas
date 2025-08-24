@@ -424,6 +424,7 @@ function enviarSaldo(chatId, usuario) {
 
 /**
  * Envia uma mensagem de ajuda com exemplos de comandos para o chat do Telegram.
+ * VERSÃO FINAL: Inclui o botão /orcamento e remove completamente o antigo /metas.
  * @param {string} chatId O ID do chat do Telegram.
  */
 function enviarAjuda(chatId) {
@@ -443,20 +444,15 @@ Para registrar, basta enviar uma mensagem.
 *Receitas:* Use _recebi, ganhei_.
 • \`recebi 3000 de salario no Itau\`
 
-*Transferências:* Use _transferi, enviei_.
-• \`transferi 200 do Itau para o Mercado Pago\`
-
-*Parcelamentos:* Adicione _em X vezes_ no final.
-• \`gastei 600 na C&A em 3x\`
-
 ---
 *📊 CONSULTAS E RELATÓRIOS*
 ---
 • \`/resumo\` – Resumo financeiro do mês.
 • \`/saldo\` – Saldo de todas as contas e faturas.
 • \`/extrato\` – Suas últimas transações.
+• \`/orcamento\` – Acompanhe seu orçamento de gastos.
+• \`/statusmetas\` – Acompanhe suas metas de poupança.
 • \`/contasapagar\` – Status das suas contas fixas.
-• \`/metas\` – Acompanhe suas metas.
 • \`/proximasfaturas\` – Veja faturas futuras.
 
 ---
@@ -465,8 +461,6 @@ Para registrar, basta enviar uma mensagem.
 • \`/tarefa\` - Cria uma nova tarefa.
   Ex: \`/tarefa Reunião amanhã às 10h\`
 • \`/tarefas\` – Lista suas tarefas pendentes.
-• \`/concluir <ID>\` – Marca uma tarefa como concluída.
-• \`/excluir_tarefa <ID>\` - Apaga uma tarefa.
 
 ---
 *⚙️ OUTROS COMANDOS*
@@ -476,6 +470,7 @@ Para registrar, basta enviar uma mensagem.
 • \`/ajuda\` – Ver esta mensagem novamente.
   `;
 
+  // Teclado de botões atualizado
   const teclado = {
     inline_keyboard: [
       [
@@ -483,14 +478,16 @@ Para registrar, basta enviar uma mensagem.
         { text: "💰 Saldo", callback_data: "/saldo" }
       ],
       [
-        { text: "📄 Extrato", callback_data: "/extrato" },
-        { text: "📝 Tarefas", callback_data: "/tarefas" }
+        // Nova linha para os comandos de planeamento
+        { text: "🧾 Orçamento", callback_data: "/orcamento" },
+        { text: "🎯 Metas", callback_data: "/metas" }
       ],
       [
-        { text: "🎯 Metas", callback_data: "/metas" },
+        { text: "📄 Extrato", callback_data: "/extrato" },
         { text: "🗓️ Contas a Pagar", callback_data: "/contasapagar" }
       ],
       [
+        { text: "📝 Tarefas", callback_data: "/tarefas" },
         { text: "🌐 Dashboard Web", callback_data: "/dashboard" }
       ]
     ]
@@ -500,191 +497,7 @@ Para registrar, basta enviar uma mensagem.
 }
 
 
-/**
- * Envia o progresso das metas financeiras para o chat do Telegram.
- * Soma os gastos por categoria e subcategoria e compara com as metas definidas na planilha.
- * @param {string} chatId O ID do chat do Telegram.
- * @param {string} usuario O nome do usuário que solicitou as metas.
- * @param {number} mes O mês para as metas (1-12).
- * @param {number} ano O ano para as metas.
- */
-function enviarMetas(chatId, usuario, mes, ano) {
-  logToSheet(`[Metas] Iniciando enviarMetas para usuario: ${usuario}, Mes: ${mes}, Ano: ${ano}`, "INFO");
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const transacoes = ss.getSheetByName(SHEET_TRANSACOES).getDataRange().getValues();
-  const metasSheet = ss.getSheetByName(SHEET_METAS).getDataRange().getValues();
 
-  const targetMesIndex = mes - 1;
-  const targetAno = ano;
-  const nomeMes = getNomeMes(targetMesIndex);
-
-  const cabecalho = metasSheet[2];
-  let colMetaMes = -1;
-
-  for (let i = 2; i < cabecalho.length; i++) {
-    if (String(cabecalho[i]).toLowerCase().includes(nomeMes.toLowerCase())) {
-      colMetaMes = i;
-      break;
-    }
-  }
-
-  if (colMetaMes === -1) {
-    logToSheet(`[Metas] Coluna do mes para ${nomeMes}/${targetAno} não encontrada na aba 'Metas'.`, "ERROR");
-    enviarMensagemTelegram(chatId, "❌ Não foi possivel carregar as metas para este mes. Verifique a aba 'Metas' para o mes de " + nomeMes + "/" + targetAno + ".");
-    return;
-  }
-  logToSheet(`[Metas] Coluna de meta encontrada para ${nomeMes}/${targetAno} no indice: ${colMetaMes}`, "DEBUG");
-
-  let metas = {};
-  let totaisPorCategoria = {};
-
-  logToSheet("[Metas] --- Inicio do Processamento de Metas (enviarMetas) ---", "DEBUG");
-  for (let i = 3; i < metasSheet.length; i++) {
-    const categoriaOriginal = (metasSheet[i][0] || "").toString().trim();
-    const subcategoriaOriginal = (metasSheet[i][1] || "").toString().trim();
-    const valorMetaTexto = metasSheet[i][colMetaMes];
-
-    if (!categoriaOriginal || !subcategoriaOriginal || !valorMetaTexto) {
-        logToSheet(`[Metas] Linha ${i + 1} da aba Metas ignorada (categoria, subcategoria ou valor vazios).`, "DEBUG");
-        continue;
-    }
-
-    const chaveCategoria = normalizarTexto(categoriaOriginal);
-    const chaveSubcategoria = normalizarTexto(`${categoriaOriginal} ${subcategoriaOriginal}`);
-
-    let meta = parseBrazilianFloat(String(valorMetaTexto));
-
-    if (isNaN(meta) || meta <= 0) {
-        logToSheet(`[Metas] Meta invalida para "${categoriaOriginal} > ${subcategoriaOriginal}" (R$ ${valorMetaTexto}). Pulando.`, "DEBUG");
-        continue;
-    }
-
-    metas[chaveSubcategoria] = {
-      categoriaOriginal: categoriaOriginal,
-      subcategoriaOriginal: subcategoriaOriginal,
-      categoriaNormalizada: chaveCategoria,
-      meta: meta,
-      gasto: 0
-    };
-
-    if (!totaisPorCategoria[chaveCategoria]) {
-      totaisPorCategoria[chaveCategoria] = { meta: 0, gasto: 0, subcategories: [], nomeOriginal: categoriaOriginal };
-      logToSheet(`[Metas] Criando entrada para categoria total: ${chaveCategoria}`, "DEBUG");
-    }
-
-    totaisPorCategoria[chaveCategoria].meta += meta;
-    totaisPorCategoria[chaveCategoria].subcategories.push(chaveSubcategoria);
-    logToSheet(`[Metas] Meta Processada: Original="${categoriaOriginal} > ${subcategoriaOriginal}", Normalizada (chaveSubcategoria)="${chaveSubcategoria}", Meta: R$ ${meta.toFixed(2)}`, "DEBUG");
-  }
-  logToSheet("[Metas] --- Fim do Processamento de Metas (enviarMetas) ---", "DEBUG");
-  logToSheet(`[Metas] Metas carregadas: ${JSON.stringify(metas)}`, "DEBUG");
-
-  logToSheet("[Metas] --- Inicio do Processamento de Transacoes (enviarMetas) ---", "DEBUG");
-  for (let i = 1; i < transacoes.length; i++) {
-    const dataVencimento = parseData(transacoes[i][10]); // Use Data de Vencimento
-    const tipo = transacoes[i][4];
-    const categoriaTransacao = (transacoes[i][2] || "").toString().trim(); 
-    const subcategoriaTransacao = (transacoes[i][3] || "").toString().trim(); 
-    const rawValor = transacoes[i][5];
-    const usuarioLinha = (transacoes[i][11] || "").toString().trim();
-
-    logToSheet(`[Metas] Transacao ${i + 1} (ID: ${transacoes[i][13] || 'N/A'}): Data Vencimento: ${dataVencimento ? dataVencimento.toLocaleDateString() : 'Invalida'}, Tipo: ${tipo}, Categoria: ${categoriaTransacao}, Subcategoria: ${subcategoriaTransacao}, Valor: ${rawValor}, Usuário da Linha: "${usuarioLinha}"`, "DEBUG");
-
-    if (
-      !dataVencimento || dataVencimento.getMonth() !== targetMesIndex || dataVencimento.getFullYear() !== targetAno || // Filter by DUE DATE
-      tipo !== "Despesa"
-    ) {
-        logToSheet(`[Metas] Transacao ${i + 1} ignorada: Data de Vencimento (${dataVencimento ? dataVencimento.toLocaleDateString() : 'N/A'}) fora do mes/ano alvo ou nao e despesa.`, "DEBUG");
-        continue;
-    }
-
-    const chaveTransacaoNormalizada = normalizarTexto(`${categoriaTransacao} ${subcategoriaTransacao}`);
-    logToSheet(`[Metas] Transacao ${i + 1} - Chave normalizada: "${chaveTransacaoNormalizada}"`, "DEBUG");
-
-    if (metas[chaveTransacaoNormalizada]) {
-      const metaEntry = metas[chaveTransacaoNormalizada];
-      const targetCategoryNormalizada = metaEntry.categoriaNormalizada;
-
-      let valor = parseBrazilianFloat(String(rawValor));
-
-      if (!isNaN(valor)) {
-        metaEntry.gasto += valor;
-        logToSheet(`[Metas] Gasto de R$ ${valor.toFixed(2)} adicionado para meta "${chaveTransacaoNormalizada}". Gasto atual na meta: R$ ${metaEntry.gasto.toFixed(2)}`, "DEBUG");
-
-        if (targetCategoryNormalizada && totaisPorCategoria[targetCategoryNormalizada]) {
-          totaisPorCategoria[targetCategoryNormalizada].gasto += valor;
-          logToSheet(`[Metas] Gasto de R$ ${valor.toFixed(2)} adicionado para total da categoria "${targetCategoryNormalizada}". Gasto atual total: R$ ${totaisPorCategoria[targetCategoryNormalizada].gasto.toFixed(2)}`, "DEBUG");
-        } else {
-          logToSheet(`[Metas] ERRO: Categoria normalizada "${targetCategoryNormalizada}" não encontrada em 'totaisPorCategoria' para meta "${chaveTransacaoNormalizada}".`, "ERROR");
-        }
-      } else {
-          logToSheet(`[Metas] Valor invalido na transacao ${i + 1} para meta "${chaveTransacaoNormalizada}": ${rawValor}`, "DEBUG");
-      }
-    } else {
-        logToSheet(`[Metas] Transacao ${i + 1} ("${chaveTransacaoNormalizada}") não encontrou meta correspondente.`, "DEBUG");
-    }
-  }
-  logToSheet("[Metas] --- Fim do Processamento de Transacoes (enviarMetas) ---", "DEBUG");
-
-  logToSheet(`[Metas] Estado final de 'metas': ${JSON.stringify(metas)}`, "DEBUG");
-  logToSheet(`[Metas] Estado final de 'totaisPorCategoria': ${JSON.stringify(totaisPorCategoria)}`, "DEBUG");
-
-
-  let mensagem = `🎯 *Metas de ${nomeMes}/${targetAno} (Visão Familiar)*\n`;
-  let totalGeral = 0;
-  let temMetasParaExibir = false;
-
-  const categoriasOrdenadas = Object.keys(totaisPorCategoria).sort((a, b) => {
-    const nomeOriginalA = totaisPorCategoria[a].nomeOriginal;
-    const nomeOriginalB = totaisPorCategoria[b].nomeOriginal;
-    return nomeOriginalA.localeCompare(nomeOriginalB);
-  });
-
-  for (const categoriaNormalizada of categoriasOrdenadas) { 
-    const bloco = totaisPorCategoria[categoriaNormalizada];
-    const percCat = bloco.meta > 0 ? (bloco.gasto / bloco.meta) * 100 : 0;
-
-    const linhasSub = [];
-    const subcategoriasOrdenadas = bloco.subcategories.sort((a, b) => {
-      const itemA = metas[a];
-      const itemB = metas[b];
-      return itemA.subcategoriaOriginal.localeCompare(itemB.subcategoriaOriginal);
-    });
-
-    for (const chaveSubcategoria of subcategoriasOrdenadas) { // CORREÇÃO: Iterar sobre 'subcategoriasOrdenadas'
-      const item = metas[chaveSubcategoria];
-      if (item.gasto > 0 || item.meta > 0) {
-        temMetasParaExibir = true; 
-        const perc = item.meta > 0 ? (item.gasto / item.meta) * 100 : 0;
-        let emoji = "";
-        if (perc >= 100 && item.meta > 0) emoji = "⛔";
-        else if (perc >= 80 && item.meta > 0) emoji = "⚠️";
-        else if (item.meta > 0) emoji = "✅";
-        else emoji = "ℹ️";
-
-        const nome = escapeMarkdown(item.subcategoriaOriginal).padEnd(20, ".");
-        const linha = `• ${nome} R$ ${item.gasto.toFixed(2).padStart(7).replace('.', ',')} / R$ ${item.meta.toFixed(2).padEnd(7).replace('.', ',')} ${emoji} ${perc.toFixed(0)}%`;
-        linhasSub.push(linha);
-      }
-    }
-
-    if (linhasSub.length > 0) {
-      mensagem += `\n──────────────\n*${escapeMarkdown(capitalize(bloco.nomeOriginal))}* — ${percCat.toFixed(0)}% da meta (R$ ${bloco.gasto.toFixed(2).replace('.', ',')} / R$ ${bloco.meta.toFixed(2).replace('.', ',')})\n`;
-      mensagem += linhasSub.join("\n");
-      totalGeral += bloco.gasto;
-    }
-  }
-
-  logToSheet(`[Metas] Valor final de 'temMetasParaExibir': ${temMetasParaExibir}`, "DEBUG");
-
-  if (!temMetasParaExibir) {
-    mensagem = `🎯 Nenhuma meta configurada ou atingida para ${nomeMes}/${targetAno} (Visão Familiar).`;
-  } else {
-     mensagem += `\n\n💵 *Total Gasto Geral:* R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
-  }
-
-  enviarMensagemTelegram(chatId, mensagem);
-}
 
 /**
  * Verifica as metas financeiras e envia alertas para o Telegram se os limites forem atingidos.
@@ -1034,85 +847,72 @@ function mostrarMenuPorPessoa(chatId, config) {
 
 /**
  * ATUALIZADA: Exclui um lançamento da aba "Transacoes" pelo seu ID único.
- * Se o lançamento excluído estiver vinculado a uma conta na aba "Contas_a_Pagar",
- * o status dessa conta será revertido para "Pendente" e o vínculo será removido.
+ * Se o lançamento for um "Aporte Meta", o valor é revertido na aba "Metas".
+ * Se estiver vinculado a uma conta a pagar, o status é revertido.
  * @param {string} idLancamento O ID único do lançamento a ser excluído.
  * @param {string} chatId O ID do chat do Telegram para enviar feedback.
  */
 function excluirLancamentoPorId(idLancamento, chatId) {
   logToSheet(`Iniciando exclusao de lancamento para ID: ${idLancamento}`, "INFO");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
-  const contasAPagarSheet = ss.getSheetByName(SHEET_CONTAS_A_PAGAR);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+    if (!transacoesSheet) throw new Error("Aba 'Transacoes' não encontrada.");
 
-  if (!transacoesSheet) {
-    enviarMensagemTelegram(chatId, "❌ Erro: Aba 'Transacoes' não encontrada.");
-    logToSheet("Erro: Aba 'Transacoes' não encontrada para exclusao.", "ERROR");
-    return;
-  }
+    const dadosTransacoes = transacoesSheet.getDataRange().getValues();
+    const headersTransacoes = dadosTransacoes[0];
+    const colIdTransacao = headersTransacoes.indexOf('ID Transacao');
+    const colDescricao = headersTransacoes.indexOf('Descricao');
+    const colValor = headersTransacoes.indexOf('Valor');
 
-  const dadosTransacoes = transacoesSheet.getDataRange().getValues();
-  const headersTransacoes = transacoesSheet.getRange(1, 1, 1, transacoesSheet.getLastColumn()).getValues()[0];
-  const colIdTransacao = headersTransacoes.indexOf('ID Transacao');
-
-  if (colIdTransacao === -1) {
-    enviarMensagemTelegram(chatId, "❌ Erro: Coluna 'ID Transacao' não encontrada na aba 'Transacoes'.");
-    logToSheet("Erro: Coluna 'ID Transacao' ausente na aba 'Transacoes' para exclusao.", "ERROR");
-    return;
-  }
-
-  let linhaParaExcluir = -1;
-  let descricaoLancamento = "";
-
-  for (let i = 1; i < dadosTransacoes.length; i++) {
-    if (dadosTransacoes[i][colIdTransacao] === idLancamento) {
-      linhaParaExcluir = i + 1;
-      descricaoLancamento = dadosTransacoes[i][1];
-      break;
+    if (colIdTransacao === -1 || colDescricao === -1 || colValor === -1) {
+      throw new Error("Colunas essenciais (ID Transacao, Descricao, Valor) não encontradas na aba 'Transacoes'.");
     }
-  }
 
-  if (linhaParaExcluir !== -1) {
-    transacoesSheet.deleteRow(linhaParaExcluir);
-    logToSheet(`Lancamento '${descricaoLancamento}' (ID: ${idLancamento}) excluído da aba 'Transacoes'.`, "INFO");
-    
-    if (contasAPagarSheet) {
-      const dadosContasAPagar = contasAPagarSheet.getDataRange().getValues();
-      const headersContasAPagar = contasAPagarSheet.getRange(1, 1, 1, contasAPagarSheet.getLastColumn()).getValues()[0];
-      const colStatusContasAPagar = headersContasAPagar.indexOf('Status');
-      const colIDTransacaoVinculada = headersContasAPagar.indexOf('ID Transacao Vinculada');
+    let linhaParaExcluir = -1;
+    let lancamentoParaExcluir = null;
 
-      if (colStatusContasAPagar !== -1 && colIDTransacaoVinculada !== -1) {
-        let contaAPagarAtualizada = false;
-        for (let i = 1; i < dadosContasAPagar.length; i++) {
-          if (dadosContasAPagar[i][colIDTransacaoVinculada] === idLancamento) {
-            const linhaContaAPagar = i + 1;
-            const descricaoContaAPagar = dadosContasAPagar[i][1];
-            
-            contasAPagarSheet.getRange(linhaContaAPagar, colStatusContasAPagar + 1).setValue("Pendente");
-            contasAPagarSheet.getRange(linhaContaAPagar, colIDTransacaoVinculada + 1).setValue("");
-            logToSheet(`Conta a Pagar '${descricaoContaAPagar}' (ID: ${dadosContasAPagar[i][0]}) revertida para 'Pendente' apos exclusao de transacao vinculada.`, "INFO");
-            contaAPagarAtualizada = true;
-            break;
-          }
-        }
-        if (!contaAPagarAtualizada) {
-          logToSheet(`Nenhuma conta a pagar vinculada ao ID de transacao '${idLancamento}' foi encontrada para reverter status.`, "DEBUG");
-        }
-      } else {
-        logToSheet("Colunas 'Status' ou 'ID Transacao Vinculada' ausentes na aba 'Contas_a_Pagar'. Nao foi possivel reverter status.", "WARN");
+    for (let i = 1; i < dadosTransacoes.length; i++) {
+      if (dadosTransacoes[i][colIdTransacao] === idLancamento) {
+        linhaParaExcluir = i + 1;
+        lancamentoParaExcluir = dadosTransacoes[i];
+        break;
       }
-    } else {
-      logToSheet("Aba 'Contas_a_Pagar' nao encontrada. Nao foi possivel reverter status de contas vinculadas.", "WARN");
     }
 
-    atualizarSaldosDasContas();
+    if (linhaParaExcluir !== -1) {
+      const descricaoLancamento = lancamentoParaExcluir[colDescricao];
+      const valorLancamento = parseBrazilianFloat(String(lancamentoParaExcluir[colValor]));
 
-    enviarMensagemTelegram(chatId, `✅ Lançamento '${escapeMarkdown(descricaoLancamento)}' (ID: ${escapeMarkdown(idLancamento)}) excluído com sucesso! Saldo atualizado.`);
-  } else {
-    enviarMensagemTelegram(chatId, `❌ Lançamento com ID *${escapeMarkdown(idLancamento)}* não encontrado.`);
-    logToSheet(`Erro: Lancamento ID ${idLancamento} nao encontrado para exclusao.`, "WARN");
+      // ### INÍCIO DA NOVA LÓGICA ###
+      // Verifica se é um aporte de meta e reverte o valor
+      if (descricaoLancamento.startsWith("Aporte Meta:")) {
+        const nomeMetaExtraido = descricaoLancamento.substring("Aporte Meta:".length).trim();
+        reverterAporteMeta(nomeMetaExtraido, valorLancamento);
+      }
+      // ### FIM DA NOVA LÓGICA ###
+
+      // Lógica existente para reverter contas a pagar
+      reverterStatusContaAPagarSeVinculado(idLancamento);
+
+      // Exclui a linha e atualiza os saldos
+      transacoesSheet.deleteRow(linhaParaExcluir);
+      logToSheet(`Lancamento '${descricaoLancamento}' (ID: ${idLancamento}) excluído da aba 'Transacoes'.`, "INFO");
+      
+      atualizarSaldosDasContas();
+
+      enviarMensagemTelegram(chatId, `✅ Lançamento '${escapeMarkdown(descricaoLancamento)}' excluído com sucesso! Saldo e metas atualizados.`);
+    } else {
+      enviarMensagemTelegram(chatId, `❌ Lançamento com ID *${escapeMarkdown(idLancamento)}* não encontrado.`);
+      logToSheet(`Erro: Lancamento ID ${idLancamento} nao encontrado para exclusao.`, "WARN");
+    }
+  } catch (e) {
+    handleError(e, `excluirLancamentoPorId para ${idLancamento}`, chatId);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -2387,3 +2187,243 @@ function enviarMensagemDeEdicao(chatId, transacao) {
 
   enviarMensagemTelegram(chatId, mensagem, { reply_markup: teclado });
 }
+
+/**
+ * NOVO: Lida com o comando /orcamento, buscando e formatando o progresso do orçamento de despesas do mês.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} usuario O nome do usuário.
+ * @param {number} mes O mês para o resumo (1-12).
+ * @param {number} ano O ano para o resumo.
+ */
+function handleOrcamentoCommand(chatId, usuario, mes, ano) {
+  try {
+    // Esta função busca os dados do orçamento. Ela será adicionada em Budget.gs
+    const progresso = getBudgetProgressForTelegram(mes, ano); 
+    
+    if (!progresso || progresso.length === 0) {
+      return enviarMensagemTelegram(chatId, `📊 Nenhum orçamento de despesas definido para ${getNomeMes(mes - 1)}/${ano}.`);
+    }
+
+    let message = `📊 *Progresso do Orçamento de ${getNomeMes(mes - 1)}/${ano}*\n\n`;
+    progresso.forEach(item => {
+      const emojiStatus = item.percentage > 100 ? '❗️' : (item.percentage > 85 ? '⚠️' : '✅');
+      const gastoFormatado = formatCurrency(item.gasto);
+      const orcadoFormatado = formatCurrency(item.orcado);
+      const barra = criarBarraDeProgresso(item.percentage);
+
+      message += `${item.icon || '🔹'} *${item.categoria}*\n`;
+      message += `${barra} ${item.percentage.toFixed(1)}%\n`;
+      message += `_${gastoFormatado} de ${orcadoFormatado}_ ${emojiStatus}\n\n`;
+    });
+
+    enviarMensagemTelegram(chatId, message);
+  } catch (e) {
+    handleError(e, "handleOrcamentoCommand", chatId);
+  }
+}
+
+/**
+ * NOVO: Lida com o comando /statusmetas, buscando e formatando o progresso das metas de poupança.
+ * @param {string} chatId O ID do chat do Telegram.
+ */
+function handleMetasCommand(chatId) {
+    try {
+        // Esta nova função busca os dados da sua nova aba "Metas". Será adicionada em Budget.gs
+        const statusMetas = getGoalsStatusForTelegram(); 
+        
+        if (!statusMetas || statusMetas.length === 0) {
+            return enviarMensagemTelegram(chatId, "🎯 Nenhuma meta de poupança definida. Crie uma na sua planilha na aba 'Metas'!");
+        }
+
+        let message = "🎯 *Progresso das Suas Metas de Poupança*\n\n";
+        statusMetas.forEach(meta => {
+            const salvoFormatado = formatCurrency(meta.salvo);
+            const objetivoFormatado = formatCurrency(meta.objetivo);
+            const barra = criarBarraDeProgresso(meta.percentage);
+
+            message += `*${meta.nome}*\n`;
+            message += `${barra} ${meta.percentage.toFixed(1)}%\n`;
+            message += `_${salvoFormatado} de ${objetivoFormatado}_\n\n`;
+        });
+
+        enviarMensagemTelegram(chatId, message);
+    } catch (e) {
+        handleError(e, "handleStatusMetasCommand", chatId);
+    }
+}
+
+/**
+ * NOVO (ou para garantir que existe): Cria uma barra de progresso com emojis.
+ * @param {number} percentage A percentagem de progresso.
+ * @returns {string} A barra de progresso formatada.
+ */
+function criarBarraDeProgresso(percentage) {
+    const totalBlocks = 10;
+    const filledBlocks = Math.round(Math.min(percentage, 100) / 100 * totalBlocks);
+    const emptyBlocks = totalBlocks - filledBlocks;
+    return '▓'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
+}
+
+// ===================================================================================
+// ### INÍCIO DA ATUALIZAÇÃO: NOVAS FUNÇÕES DE GESTÃO DE METAS ###
+// ===================================================================================
+
+/**
+ * Lida com o comando /novameta para criar um novo objetivo de poupança.
+ * Formato esperado: /novameta [Nome da Meta] [Valor Objetivo]
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} complemento O texto que segue o comando.
+ */
+function handleNovaMetaCommand(chatId, complemento) {
+  try {
+    // Extrai o nome e o valor do complemento
+    const match = complemento.match(/(.+)\s+([\d.,]+)$/);
+    if (!match) {
+      enviarMensagemTelegram(chatId, "❌ Formato inválido. Use: `/novameta NOME DA META VALOR`\nExemplo: `/novameta Viagem ao Japão 15000`");
+      return;
+    }
+
+    const nomeMeta = match[1].trim();
+    const valorObjetivo = parseBrazilianFloat(match[2]);
+
+    if (!nomeMeta || isNaN(valorObjetivo) || valorObjetivo <= 0) {
+      enviarMensagemTelegram(chatId, "❌ Dados inválidos. Certifique-se de que o nome não está vazio e o valor é um número positivo.");
+      return;
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const metasSheet = ss.getSheetByName(SHEET_METAS);
+    if (!metasSheet) {
+      throw new Error("Aba 'Metas' não encontrada.");
+    }
+
+    // Adiciona a nova meta na planilha
+    metasSheet.appendRow([
+      nomeMeta,
+      valorObjetivo,
+      0, // Valor Salvo inicial
+      '', // Data Alvo (opcional)
+      'Em Andamento' // Status
+    ]);
+
+    logToSheet(`Nova meta criada: '${nomeMeta}' com objetivo de R$ ${valorObjetivo.toFixed(2)}`, "INFO");
+    enviarMensagemTelegram(chatId, `✅ Nova meta criada com sucesso!\n\n🎯 *${escapeMarkdown(nomeMeta)}*\n*Objetivo:* ${formatCurrency(valorObjetivo)}`);
+
+  } catch (e) {
+    handleError(e, "handleNovaMetaCommand", chatId);
+  }
+}
+
+/**
+ * ATUALIZADA: Lida com o comando /aportarmeta para adicionar valor a uma meta de poupança.
+ * Corrige o erro onde o nome do usuário era gravado incorretamente na aba 'Transacoes'.
+ * Formato esperado: /aportarmeta [Palavra-chave da Meta] [Valor] de [Conta de Origem]
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} complemento O texto que segue o comando.
+ * @param {string} usuario O nome do usuário que fez o aporte.
+ */
+function handleAportarMetaCommand(chatId, complemento, usuario) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    // Extrai a palavra-chave da meta, o valor e a conta de origem
+    const match = complemento.match(/(.+?)\s+([\d.,]+)\s+(?:de|do|da)\s+(.+)/i);
+    if (!match) {
+      enviarMensagemTelegram(chatId, "❌ Formato inválido. Use: `/aportarmeta META VALOR de CONTA`\nExemplo: `/aportarmeta Japão 500 do Nubank`");
+      return;
+    }
+
+    const metaKeyword = normalizarTexto(match[1].trim());
+    const valorAporte = parseBrazilianFloat(match[2]);
+    const nomeContaOrigem = match[3].trim();
+
+    if (!metaKeyword || isNaN(valorAporte) || valorAporte <= 0 || !nomeContaOrigem) {
+      enviarMensagemTelegram(chatId, "❌ Dados inválidos. Verifique a palavra-chave da meta, o valor e o nome da conta.");
+      return;
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const metasSheet = ss.getSheetByName(SHEET_METAS);
+    const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+    const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
+
+    // Encontra a conta de origem
+    const contaOrigemInfo = obterInformacoesDaConta(nomeContaOrigem, dadosContas);
+    if (!contaOrigemInfo) {
+      enviarMensagemTelegram(chatId, `❌ Conta de origem "${escapeMarkdown(nomeContaOrigem)}" não encontrada.`);
+      return;
+    }
+    const nomeRealConta = contaOrigemInfo.nomeOriginal;
+
+    // Encontra a meta na planilha
+    const dadosMetas = metasSheet.getDataRange().getValues();
+    const headers = dadosMetas[0];
+    const colMap = getColumnMap(headers);
+    
+    let rowIndex = -1;
+    let nomeRealMeta = "";
+    for (let i = 1; i < dadosMetas.length; i++) {
+      const nomeMetaAtual = dadosMetas[i][colMap['Nome da Meta']];
+      if (normalizarTexto(nomeMetaAtual).includes(metaKeyword)) {
+        rowIndex = i + 1;
+        nomeRealMeta = nomeMetaAtual;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      enviarMensagemTelegram(chatId, `❌ Nenhuma meta encontrada com a palavra-chave "${escapeMarkdown(metaKeyword)}".`);
+      return;
+    }
+
+    // Atualiza o valor salvo na aba Metas
+    const valorSalvoAtual = parseBrazilianFloat(String(dadosMetas[rowIndex - 1][colMap['Valor Salvo']] || '0'));
+    const novoValorSalvo = valorSalvoAtual + valorAporte;
+    metasSheet.getRange(rowIndex, colMap['Valor Salvo'] + 1).setValue(novoValorSalvo);
+
+    // ### INÍCIO DA CORREÇÃO ###
+    // Regista a transação com o 'usuario' na coluna correta (índice 11)
+    const idTransacao = Utilities.getUuid();
+    const hoje = new Date();
+    transacoesSheet.appendRow([
+      hoje,                             // Data (A)
+      `Aporte Meta: ${nomeRealMeta}`,  // Descricao (B)
+      '📈 Investimentos / Futuro',     // Categoria (C)
+      'Aporte em Meta',                 // Subcategoria (D)
+      'Despesa',                        // Tipo (E)
+      valorAporte,                      // Valor (F)
+      'Transferência',                  // Metodo de Pagamento (G)
+      nomeRealConta,                    // Conta/Cartão (H)
+      1,                                // Parcelas Totais (I)
+      1,                                // Parcela Atual (J)
+      hoje,                             // Data de Vencimento (K)
+      usuario,                          // Usuario (L) <-- CORRIGIDO
+      'Ativo',                          // Status (M)
+      idTransacao,                      // ID Transacao (N)
+      hoje                              // Data de Registro (O)
+    ]);
+    // ### FIM DA CORRECIÇÃO ###
+    
+    atualizarSaldosDasContas();
+
+    logToSheet(`Aporte de R$ ${valorAporte.toFixed(2)} realizado na meta '${nomeRealMeta}' a partir da conta '${nomeRealConta}'.`, "INFO");
+    
+    const valorObjetivo = parseBrazilianFloat(String(dadosMetas[rowIndex - 1][colMap['Valor Objetivo']] || '0'));
+    const percentualConcluido = valorObjetivo > 0 ? (novoValorSalvo / valorObjetivo) * 100 : 0;
+
+    enviarMensagemTelegram(chatId, `✅ Aporte de ${formatCurrency(valorAporte)} registado com sucesso!\n\n` +
+                                   `🎯 *${escapeMarkdown(nomeRealMeta)}*\n` +
+                                   `${criarBarraDeProgresso(percentualConcluido)} ${percentualConcluido.toFixed(1)}%\n` +
+                                   `*Salvo:* ${formatCurrency(novoValorSalvo)} / ${formatCurrency(valorObjetivo)}`);
+
+  } catch (e) {
+    handleError(e, "handleAportarMetaCommand", chatId);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ===================================================================================
+// ### FIM DA ATUALIZAÇÃO ###
+// ===================================================================================
+
