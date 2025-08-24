@@ -1429,4 +1429,79 @@ function processarRespostaDoAssistente(chatId, usuario, textoRecebido, assistant
   }
 }
 
+/**
+ * NOVO: Reverte (subtrai) o valor de um aporte na aba 'Metas'.
+ * @param {string} nomeMeta O nome da meta a ser revertida.
+ * @param {number} valorReverter O valor a ser subtraído do 'Valor Salvo'.
+ */
+function reverterAporteMeta(nomeMeta, valorReverter) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const metasSheet = ss.getSheetByName(SHEET_METAS);
+    if (!metasSheet) {
+      logToSheet(`[reverterAporteMeta] Aba 'Metas' não encontrada. Reversão falhou.`, "WARN");
+      return;
+    }
 
+    const dadosMetas = metasSheet.getDataRange().getValues();
+    const headers = dadosMetas[0];
+    const colMap = getColumnMap(headers);
+
+    if (colMap['Nome da Meta'] === undefined || colMap['Valor Salvo'] === undefined) {
+      logToSheet(`[reverterAporteMeta] Colunas 'Nome da Meta' ou 'Valor Salvo' não encontradas.`, "WARN");
+      return;
+    }
+
+    const nomeMetaNormalizado = normalizarTexto(nomeMeta);
+    let rowIndex = -1;
+
+    for (let i = 1; i < dadosMetas.length; i++) {
+      if (normalizarTexto(dadosMetas[i][colMap['Nome da Meta']]) === nomeMetaNormalizado) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (rowIndex !== -1) {
+      const valorSalvoAtual = parseBrazilianFloat(String(dadosMetas[rowIndex - 1][colMap['Valor Salvo']] || '0'));
+      const novoValorSalvo = valorSalvoAtual - valorReverter;
+      metasSheet.getRange(rowIndex, colMap['Valor Salvo'] + 1).setValue(novoValorSalvo);
+      logToSheet(`Reversão de aporte na meta '${nomeMeta}'. Valor salvo atualizado de ${valorSalvoAtual} para ${novoValorSalvo}.`, "INFO");
+    } else {
+      logToSheet(`[reverterAporteMeta] Meta '${nomeMeta}' não encontrada para reverter o valor.`, "WARN");
+    }
+  } catch (e) {
+    handleError(e, "reverterAporteMeta");
+  }
+}
+/**
+ * Reverte o status de uma conta na aba 'Contas_a_Pagar' para 'Pendente'
+ * se ela estiver vinculada a um ID de transação que foi excluído.
+ * @param {string} idLancamento O ID da transação que foi excluída.
+ */
+function reverterStatusContaAPagarSeVinculado(idLancamento) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const contasAPagarSheet = ss.getSheetByName(SHEET_CONTAS_A_PAGAR);
+    if (!contasAPagarSheet) return;
+
+    const dadosContasAPagar = contasAPagarSheet.getDataRange().getValues();
+    const headers = dadosContasAPagar[0];
+    const colStatus = headers.indexOf('Status');
+    const colIDTransacao = headers.indexOf('ID Transacao Vinculada');
+
+    if (colStatus === -1 || colIDTransacao === -1) return;
+
+    for (let i = 1; i < dadosContasAPagar.length; i++) {
+      if (dadosContasAPagar[i][colIDTransacao] === idLancamento) {
+        const linhaParaAtualizar = i + 1;
+        contasAPagarSheet.getRange(linhaParaAtualizar, colStatus + 1).setValue("Pendente");
+        contasAPagarSheet.getRange(linhaParaAtualizar, colIDTransacao + 1).setValue("");
+        logToSheet(`Status da conta a pagar (linha ${linhaParaAtualizar}) revertido para 'Pendente'.`, "INFO");
+        break;
+      }
+    }
+  } catch (e) {
+    handleError(e, "reverterStatusContaAPagarSeVinculado");
+  }
+}
