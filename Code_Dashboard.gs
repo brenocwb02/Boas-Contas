@@ -288,53 +288,53 @@ function _getRecentTransactions(dadosTransacoes, currentMonth, currentYear) {
 
 /**
  * @private
- * Calcula o progresso das metas financeiras para o mês.
+ * Calcula o progresso das metas financeiras (OBJETIVOS DE POUPANÇA) a partir da nova aba "Metas".
+ * Esta função substitui a lógica anterior que lia a previsão de despesas.
+ * VERSÃO CORRIGIDA E MAIS ROBUSTA.
  */
-function _getGoalsProgress(dadosMetas, dadosTransacoes, nomeMesAtual, currentMonth, currentYear, categoryIconsMap) {
+function _getGoalsProgress(dadosMetas, categoryIconsMap) {
     const goalsProgress = [];
-    if (dadosMetas.length <= 2) return goalsProgress;
+    // Verifica se a aba Metas existe e tem pelo menos uma meta (além do cabeçalho)
+    if (!dadosMetas || dadosMetas.length < 2) {
+        console.log("AVISO: A aba 'Metas' está vazia ou não foi encontrada. Nenhuma meta será exibida.");
+        return goalsProgress; // Retorna um array vazio, não causa erro.
+    }
 
-    const cabecalhoMetas = dadosMetas[2];
-    const colMetaMes = cabecalhoMetas.findIndex(h => String(h).toLowerCase().includes(`${nomeMesAtual.toLowerCase()}/${currentYear}`));
+    // Pega o cabeçalho para encontrar as colunas pelo nome
+    const headers = dadosMetas[0];
+    const colMap = getColumnMap(headers);
 
-    if (colMetaMes === -1) return goalsProgress;
+    // Verifica se as colunas essenciais existem na nova aba Metas
+    if (colMap['Nome da Meta'] === undefined || colMap['Valor Objetivo'] === undefined || colMap['Valor Salvo'] === undefined) {
+        console.log("AVISO: A aba 'Metas' não tem a estrutura esperada (Nome da Meta, Valor Objetivo, Valor Salvo).");
+        return goalsProgress; // Retorna um array vazio para não quebrar o dashboard.
+    }
 
-    let metasMap = {};
-    for (let i = 3; i < dadosMetas.length; i++) {
+    // Itera por cada linha de meta (começando da linha 2, pulando o cabeçalho)
+    for (let i = 1; i < dadosMetas.length; i++) {
         const row = dadosMetas[i];
-        const { cleanCategory: categoriaMeta, icon: planilhaIconMeta } = _extractIconAndCleanCategory(row[0]);
-        const subcategoriaMeta = (row[1] || "").toString().trim();
-        const meta = parseBrazilianFloat(String(row[colMetaMes]));
 
-        if (categoriaMeta && subcategoriaMeta && meta > 0) {
-            const key = normalizarTexto(`${categoriaMeta}_${subcategoriaMeta}`);
-            metasMap[key] = {
-                categoria: categoriaMeta, subcategoria: subcategoriaMeta, meta: meta, gasto: 0,
-                icon: planilhaIconMeta || categoryIconsMap[normalizarTexto(categoriaMeta)] || ''
-            };
+        const nomeMeta = row[colMap['Nome da Meta']];
+        // Converte para número, tratando tanto o formato "R$ 1.234,56" quanto "1234.56"
+        const valorObjetivo = parseBrazilianFloat(String(row[colMap['Valor Objetivo']] || '0'));
+        const valorSalvo = parseBrazilianFloat(String(row[colMap['Valor Salvo']] || '0'));
+
+        // Adiciona a meta à lista apenas se ela tiver um nome e um objetivo definido
+        if (nomeMeta && valorObjetivo > 0) {
+            const percentage = valorObjetivo > 0 ? round((valorSalvo / valorObjetivo) * 100, 2) : 0;
+
+            goalsProgress.push({
+                // A estrutura de dados enviada para o frontend agora é mais simples
+                categoria: nomeMeta, // Usamos o campo 'categoria' para o nome da meta
+                subcategoria: '', // Não temos mais subcategoria aqui
+                meta: valorObjetivo,
+                gasto: valorSalvo, // O campo 'gasto' agora representa 'salvo'
+                percentage: percentage,
+                icon: '🎯' // Um ícone padrão para metas
+            });
         }
     }
 
-    for (let i = 1; i < dadosTransacoes.length; i++) {
-        const row = dadosTransacoes[i];
-        const data = parseData(row[10]); // Data de Vencimento
-        if (data && data.getMonth() === currentMonth && data.getFullYear() === currentYear && row[4] === "Despesa") {
-            const { cleanCategory: categoriaTransacao } = _extractIconAndCleanCategory(row[2]);
-            const subcategoriaTransacao = row[3];
-            const key = normalizarTexto(`${categoriaTransacao}_${subcategoriaTransacao}`);
-            if (metasMap[key]) {
-                metasMap[key].gasto += parseBrazilianFloat(String(row[5]));
-            }
-        }
-    }
-
-    for (const key in metasMap) {
-        const item = metasMap[key];
-        if (item.gasto > 0) {
-            const percentage = item.meta > 0 ? round((item.gasto / item.meta) * 100, 2) : 0;
-            goalsProgress.push({ ...item, gasto: round(item.gasto, 2), percentage });
-        }
-    }
     return goalsProgress;
 }
 
@@ -462,7 +462,7 @@ function getDashboardData(mes, ano) {
   const creditCardSummaries = getCreditCardSpendingForMonth(dadosTransacoes, dadosContas, mes, ano);
   const billsToPay = _getBillsToPay(dadosContasAPagar, currentMonth, currentYear);
   const recentTransactions = _getRecentTransactions(dadosTransacoes, currentMonth, currentYear);
-  const goalsProgress = _getGoalsProgress(dadosMetas, dadosTransacoes, nomeMesAtual, currentMonth, currentYear, categoryIconsMap);
+  const goalsProgress = _getGoalsProgress(dadosMetas, categoryIconsMap);
   const budgetProgress = _getBudgetProgress(dadosOrcamento, dadosTransacoes, currentMonth, currentYear, categoryIconsMap);
   const expensesByCategoryArray = _getExpensesByCategoryChartData(dadosTransacoes, currentMonth, currentYear, categoryIconsMap);
   
@@ -580,7 +580,8 @@ function addTransactionFromWeb(transactionData) {
 }
 
 /**
- * Deleta uma transação da planilha 'Transacoes' e atualiza os saldos.
+ * ATUALIZADA: Deleta uma transação da planilha 'Transacoes' a partir do Dashboard.
+ * Se o lançamento for um "Aporte Meta", o valor é revertido na aba "Metas".
  * @param {string} transactionId O ID único da transação a ser deletada.
  * @returns {object} Um objeto com status de sucesso ou erro.
  */
@@ -593,16 +594,37 @@ function deleteTransactionFromWeb(transactionId) {
     if (!transacoesSheet) throw new Error(`Planilha "${SHEET_TRANSACOES}" não encontrada.`);
 
     const data = transacoesSheet.getDataRange().getValues();
-    const idColumnIndex = data[0].indexOf('ID Transacao');
-    if (idColumnIndex === -1) throw new Error("Coluna 'ID Transacao' não encontrada.");
+    const headers = data[0];
+    const idColumnIndex = headers.indexOf('ID Transacao');
+    const descColumnIndex = headers.indexOf('Descricao');
+    const valueColumnIndex = headers.indexOf('Valor');
+    
+    if (idColumnIndex === -1 || descColumnIndex === -1 || valueColumnIndex === -1) {
+      throw new Error("Colunas essenciais (ID Transacao, Descricao, Valor) não encontradas.");
+    }
 
     const rowIndexToDelete = data.slice(1).findIndex(row => row[idColumnIndex] == transactionId);
 
     if (rowIndexToDelete !== -1) {
-      transacoesSheet.deleteRow(rowIndexToDelete + 2); // +2 para compensar cabeçalho e índice 0
-      logToSheet(`Transação com ID ${transactionId} deletada.`, "INFO");
+      const rowData = data[rowIndexToDelete + 1];
+      const description = rowData[descColumnIndex];
+      const value = parseBrazilianFloat(String(rowData[valueColumnIndex]));
+
+      // ### INÍCIO DA NOVA LÓGICA ###
+      if (description.startsWith("Aporte Meta:")) {
+        const metaName = description.substring("Aporte Meta:".length).trim();
+        reverterAporteMeta(metaName, value);
+      }
+      // ### FIM DA NOVA LÓGICA ###
+      
+      reverterStatusContaAPagarSeVinculado(transactionId);
+
+      transacoesSheet.deleteRow(rowIndexToDelete + 2);
+      logToSheet(`Transação com ID ${transactionId} deletada via Dashboard.`, "INFO");
+      
       atualizarSaldosDasContas();
-      return { success: true, message: `Transação ${transactionId} excluída com sucesso.` };
+      
+      return { success: true, message: `Transação excluída com sucesso.` };
     } else {
       return { success: false, message: `Transação com ID ${transactionId} não encontrada.` };
     }
@@ -707,4 +729,129 @@ function showDashboard() {
       .setWidth(1200)
       .setHeight(700);
   SpreadsheetApp.getUi().showModalDialog(html, 'Boas Contas Dashboard');
+}
+
+
+// ### INÍCIO DA ATUALIZAÇÃO ###
+// NOVAS FUNÇÕES PARA GERIR CONTAS A PARTIR DO DASHBOARD
+// ### FIM DA ATUALIZAÇÃO ###
+
+/**
+ * Adiciona ou atualiza uma conta na aba 'Contas'.
+ * @param {Object} accountData - Dados da conta a serem salvos.
+ * { originalName: 'Nome Antigo' (opcional, para edição), 
+ * name: 'Nome Novo', type: 'Tipo', bank: 'Banco', initialBalance: 100 }
+ * @returns {Object} Objeto com status de sucesso ou erro.
+ */
+function addOrUpdateAccountFromWeb(accountData) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_CONTAS);
+    if (!sheet) throw new Error(`Aba "${SHEET_CONTAS}" não encontrada.`);
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const nameColIndex = headers.indexOf('Nome da Conta');
+    if (nameColIndex === -1) throw new Error("Coluna 'Nome da Conta' não encontrada.");
+
+    const isEditing = !!accountData.originalName;
+    let rowIndexToUpdate = -1;
+
+    // Verifica se o novo nome já existe (exceto se for o nome original)
+    const newNameExists = data.slice(1).some((row, index) => {
+        if (isEditing && row[nameColIndex] === accountData.originalName) {
+            rowIndexToUpdate = index + 2; // +2 para linha real
+            return false;
+        }
+        return row[nameColIndex] === accountData.name;
+    });
+
+    if (newNameExists) {
+        throw new Error(`O nome de conta "${accountData.name}" já existe.`);
+    }
+    
+    if (isEditing && rowIndexToUpdate === -1) {
+        // Se estava a editar mas o nome original não foi encontrado
+        rowIndexToUpdate = data.slice(1).findIndex(row => row[nameColIndex] === accountData.originalName) + 2;
+        if(rowIndexToUpdate < 2) throw new Error(`Conta original "${accountData.originalName}" não encontrada para edição.`);
+    }
+
+    const typeColIndex = headers.indexOf('Tipo');
+    const bankColIndex = headers.indexOf('Banco');
+    const initialBalanceColIndex = headers.indexOf('Saldo Inicial');
+
+    if (isEditing) {
+      // Atualiza a linha existente
+      sheet.getRange(rowIndexToUpdate, nameColIndex + 1).setValue(accountData.name);
+      if (typeColIndex > -1) sheet.getRange(rowIndexToUpdate, typeColIndex + 1).setValue(accountData.type);
+      if (bankColIndex > -1) sheet.getRange(rowIndexToUpdate, bankColIndex + 1).setValue(accountData.bank);
+      if (initialBalanceColIndex > -1) sheet.getRange(rowIndexToUpdate, initialBalanceColIndex + 1).setValue(accountData.initialBalance);
+      logToSheet(`Conta '${accountData.originalName}' atualizada para '${accountData.name}'.`, "INFO");
+
+    } else {
+      // Adiciona nova linha
+      const newRow = Array(headers.length).fill('');
+      newRow[nameColIndex] = accountData.name;
+      newRow[typeColIndex] = accountData.type;
+      newRow[bankColIndex] = accountData.bank;
+      newRow[initialBalanceColIndex] = accountData.initialBalance;
+      newRow[headers.indexOf('Status')] = 'Ativo'; // Define como ativa por padrão
+      sheet.appendRow(newRow);
+      logToSheet(`Nova conta '${accountData.name}' adicionada.`, "INFO");
+    }
+
+    // Recalcula todos os saldos após a alteração
+    atualizarSaldosDasContas();
+    return { success: true, message: `Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso.` };
+
+  } catch (e) {
+    handleError(e, "addOrUpdateAccountFromWeb");
+    return { success: false, message: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Exclui uma conta da aba 'Contas'.
+ * @param {string} accountName - O nome da conta a ser excluída.
+ * @returns {Object} Objeto com status de sucesso ou erro.
+ */
+function deleteAccountFromWeb(accountName) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_CONTAS);
+    if (!sheet) throw new Error(`Aba "${SHEET_CONTAS}" não encontrada.`);
+    
+    // Adicionar verificação de transações vinculadas antes de excluir
+    const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+    const dadosTransacoes = transacoesSheet.getDataRange().getValues();
+    const contaColIndexTrans = dadosTransacoes[0].indexOf('Conta/Cartão');
+    const hasTransactions = dadosTransacoes.slice(1).some(row => row[contaColIndexTrans] === accountName);
+
+    if (hasTransactions) {
+      throw new Error(`Não é possível excluir a conta "${accountName}", pois ela possui transações vinculadas.`);
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const nameColIndex = data[0].indexOf('Nome da Conta');
+    const rowIndexToDelete = data.slice(1).findIndex(row => row[nameColIndex] === accountName);
+
+    if (rowIndexToDelete !== -1) {
+      sheet.deleteRow(rowIndexToDelete + 2);
+      logToSheet(`Conta '${accountName}' excluída.`, "INFO");
+      return { success: true, message: 'Conta excluída com sucesso.' };
+    } else {
+      throw new Error(`Conta "${accountName}" não encontrada para exclusão.`);
+    }
+  } catch (e) {
+    handleError(e, "deleteAccountFromWeb");
+    return { success: false, message: e.message };
+  } finally {
+    lock.releaseLock();
+  }
 }
