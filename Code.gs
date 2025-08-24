@@ -199,10 +199,11 @@ function doPost(e) {
       // --- TAREFAS: Adicionar novos comandos conhecidos ---
       const comandosConhecidosSemBarra = [
           "start", "dashboard", "resumo", "saldo", "extrato", "proximasfaturas", 
-          "contasapagar", "metas", "ajuda", "editar", "vincular_conta", "tutorial", 
+          "contasapagar", "ajuda", "editar", "vincular_conta", "tutorial", 
           "adicionar_conta", "listar_contas", "adicionar_categoria", "listar_categorias", 
           "listar_subcategorias", "tarefa", "lembrete", "tarefas", "agenda", "concluir", 
-          "excluir_tarefa", "saude" 
+          "excluir_tarefa", "saude",
+          "orcamento", "metas", "novameta", "aportarmeta" // <-- NOVOS COMANDOS ADICIONADOS
       ];
 
       if (comandosConhecidosSemBarra.includes(comandoNormalizado)) {
@@ -260,7 +261,7 @@ function doPost(e) {
     // --- Processamento dos comandos ---
     switch (comandoBase) {
       case "/start":
-          enviarMensagemTelegram(chatId, `Olá ${escapeMarkdown(usuario)}! Bem-vindo ao seu assistente financeiro. Eu posso te ajudar a registrar gastos e receitas, ver seu saldo, extrato e mais.\n\nPara começar, tente algo como:\n- "gastei 50 no mercado com Cartao Nubank Breno"\n- "paguei 50 de uber no debito do Santander"\n- "recebi 100 de salário no Itaú via PIX"\n- "transferi 20 do Nubank para o Itaú"\n\nOu use comandos como:\n- /resumo (para ver seu resumo do mês)\n- /saldo (para ver o saldo das suas contas)\n- /ajuda (para ver todos os comandos e exemplos)\n\nSe precisar de ajuda, digite /ajuda`);
+          enviarMensagemTelegram(chatId, `Olá ${escapeMarkdown(usuario)}! Bem-vindo ao Boas Contas, seu assistente financeiro. Eu posso te ajudar a registrar gastos e receitas, ver seu saldo, extrato e mais.\n\nPara começar, tente algo como:\n- "gastei 50 no mercado com Cartao Nubank XYZ"\n- "paguei 50 de uber no debito do Santander"\n- "recebi 100 de salário no Itaú via PIX"\n- "transferi 20 do Nubank para o Itaú"\n\nOu use comandos como:\n- /resumo (para ver seu resumo do mês)\n- /saldo (para ver o saldo das suas contas)\n- /ajuda (para ver todos os comandos e exemplos)\n\nSe precisar de ajuda, digite /ajuda`);
           return;
       case "/confirm":
         logToSheet(`Comando /confirm detectado para transacao ID: ${complemento}`, "INFO");
@@ -552,10 +553,28 @@ function doPost(e) {
           logToSheet(`Comando /ajuda detectado.`, "INFO");
           enviarAjuda(chatId);
           return;
-      case "/metas":
-          logToSheet(`Comando /metas detectado. Mes: ${targetMonth}, Ano: ${targetYear}`, "INFO");
-          enviarMetas(chatId, usuario, targetMonth, targetYear);
+      // --- NOVOS COMANDOS E CORREÇÕES ---
+      case "/orcamento":
+          logToSheet(`Comando /orcamento detectado. Mes: ${targetMonth}, Ano: ${targetYear}`, "INFO");
+          handleOrcamentoCommand(chatId, usuario, targetMonth, targetYear);
           return;
+
+      case "/metas":
+          logToSheet(`Comando /metas detectado.`, "INFO");
+          handleMetasCommand(chatId);
+          return;
+
+      // --- NOVOS COMANDOS PARA GESTÃO DE METAS ---
+      case "/novameta":
+          logToSheet(`Comando /novameta detectado. Complemento: "${complemento}"`, "INFO");
+          handleNovaMetaCommand(chatId, complemento);
+          return;
+          
+      case "/aportarmeta":
+          logToSheet(`Comando /aportarmeta detectado. Complemento: "${complemento}"`, "INFO");
+          handleAportarMetaCommand(chatId, complemento, usuario);
+          return;
+      // --- FIM DOS NOVOS COMANDOS ---
 
       default:
         const palavrasConsulta = ["quanto", "qual", "quais", "listar", "mostrar", "total"];
@@ -884,4 +903,12 @@ function reconciliarSaldosManualmente() {
   SpreadsheetApp.getActiveSpreadsheet().toast('Iniciando re-sincronização completa dos saldos... Isso pode levar um momento.', 'Manutenção', 30);
   atualizarSaldosDasContas(); // Chama a função original e completa
   SpreadsheetApp.getUi().alert('Sucesso!', 'Os saldos de todas as contas foram recalculados e sincronizados com sucesso.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+// Em Code.gs
+function exibirDashboardModerno() {
+  var html = HtmlService.createHtmlOutputFromFile('Dashboard_Moderno')
+      .setTitle('Boas Contas - Dashboard')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  SpreadsheetApp.getUi().showSidebar(html);
 }
