@@ -783,6 +783,16 @@
             color: var(--accent-red);
         }
 
+        /* Animação para feedback visual */
+        @keyframes highlight-fade {
+            0%   { background-color: rgba(20, 184, 166, 0.2); }
+            100% { background-color: transparent; }
+        }
+        .highlight {
+            animation: highlight-fade 2s ease-in-out;
+        }
+
+
         /* Bills */
         .bill-item {
             display: flex;
@@ -1415,9 +1425,6 @@
                                     <div class="summary-icon receitas">
                                         <i class="fas fa-arrow-up"></i>
                                     </div>
-                                    <div class="summary-trend trend-up">
-                                        <i class="fas fa-arrow-up"></i> --%
-                                    </div>
                                 </div>
                                 <div class="summary-value" id="total-receitas">R$ 0,00</div>
                                 <div class="summary-label">Receitas do Mês</div>
@@ -1427,9 +1434,6 @@
                                 <div class="summary-header">
                                     <div class="summary-icon despesas">
                                         <i class="fas fa-arrow-down"></i>
-                                    </div>
-                                    <div class="summary-trend trend-down">
-                                        <i class="fas fa-arrow-down"></i> --%
                                     </div>
                                 </div>
                                 <div class="summary-value" id="total-despesas">R$ 0,00</div>
@@ -1441,12 +1445,24 @@
                                     <div class="summary-icon saldo">
                                         <i class="fas fa-wallet"></i>
                                     </div>
-                                    <div class="summary-trend trend-up">
-                                        <i class="fas fa-arrow-up"></i> --%
-                                    </div>
                                 </div>
                                 <div class="summary-value" id="saldo-liquido">R$ 0,00</div>
                                 <div class="summary-label">Saldo Líquido</div>
+                            </div>
+                            
+                            <!-- NOVO CARD DE PATRIMÔNIO LÍQUIDO -->
+                            <div class="summary-card saldo" id="net-worth-card">
+                                <div class="summary-header">
+                                    <div class="summary-icon saldo">
+                                        <i class="fas fa-balance-scale"></i>
+                                    </div>
+                                </div>
+                                <div class="summary-value" id="patrimonio-liquido">R$ 0,00</div>
+                                <div class="summary-label">Patrimônio Líquido</div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 8px; display: flex; justify-content: space-between;">
+                                    <span class="positive" id="total-ativos-summary">Ativos: R$ 0,00</span>
+                                    <span class="negative" id="total-passivos-summary">Passivos: R$ 0,00</span>
+                                </div>
                             </div>
                         </div>
 
@@ -1785,6 +1801,28 @@
             else saldoElement.classList.add('neutral');
         }
 
+        // NOVA FUNÇÃO PARA RENDERIZAR O PATRIMÔNIO LÍQUIDO
+        function renderNetWorth(netWorthData) {
+            if (!netWorthData) return;
+
+            const netWorthElement = document.getElementById('patrimonio-liquido');
+            const assetsElement = document.getElementById('total-ativos-summary');
+            const liabilitiesElement = document.getElementById('total-passivos-summary');
+
+            netWorthElement.textContent = formatCurrency(netWorthData.netWorth);
+            assetsElement.textContent = `Ativos: ${formatCurrency(netWorthData.assets)}`;
+            liabilitiesElement.textContent = `Passivos: ${formatCurrency(netWorthData.liabilities)}`;
+
+            netWorthElement.classList.remove('positive', 'negative', 'neutral');
+            if (netWorthData.netWorth > 0) {
+                netWorthElement.classList.add('positive');
+            } else if (netWorthData.netWorth < 0) {
+                netWorthElement.classList.add('negative');
+            } else {
+                netWorthElement.classList.add('neutral');
+            }
+        }
+
         // ### INÍCIO DA ATUALIZAÇÃO: FUNÇÃO DE RENDERIZAÇÃO DE CONTAS SUBSTITUÍDA ###
         function renderAccountBalances(accounts) {
             const gridContainer = document.getElementById('account-balances-grid');
@@ -1845,13 +1883,37 @@
             }).join('');
         }
 
-        function renderRecentTransactions(transactions) {
+        // Função de renderização de transações atualizada
+        function renderRecentTransactions(transactions, newTransactionId = null) {
             const container = document.getElementById('recent-transactions');
             if (!transactions || transactions.length === 0) {
                 container.innerHTML = `<div class="empty-state"><i class="fas fa-history"></i><div>Nenhuma transação encontrada</div></div>`;
                 return;
             }
-            container.innerHTML = transactions.map(transaction => `<div class="transaction-item" data-id="${transaction.id}"><div class="transaction-icon ${transaction.tipo.toLowerCase()}"><i class="fas fa-${transaction.tipo === 'Receita' ? 'arrow-up' : 'arrow-down'}"></i></div><div class="transaction-details"><div class="transaction-desc">${transaction.descricao}</div><div class="transaction-meta">${transaction.data} • ${transaction.categoria} • ${transaction.conta}</div></div><div class="transaction-amount ${transaction.tipo === 'Receita' ? 'positive' : 'negative'}">${transaction.tipo === 'Receita' ? '+' : '-'}${formatCurrency(Math.abs(transaction.valor))}</div><div class="transaction-actions"><button class="edit-transaction-btn" data-id="${transaction.id}" title="Editar Lançamento"><i class="fas fa-edit"></i></button><button class="delete-transaction-btn" data-id="${transaction.id}" title="Excluir Lançamento"><i class="fas fa-trash-alt"></i></button></div></div>`).join('');
+            container.innerHTML = transactions.map(transaction => {
+                // Adiciona a classe 'highlight' se for a nova transação
+                const highlightClass = transaction.id === newTransactionId ? 'highlight' : '';
+                return `
+                    <div class="transaction-item ${highlightClass}" data-id="${transaction.id}">
+                        <div class="transaction-icon ${transaction.tipo.toLowerCase()}">
+                            <i class="fas fa-${transaction.tipo === 'Receita' ? 'arrow-up' : 'arrow-down'}"></i>
+                        </div>
+                        <div class="transaction-details">
+                            <div class="transaction-desc">${transaction.descricao}</div>
+                            <div class="transaction-meta">${transaction.data} • ${transaction.categoria} • ${transaction.conta}</div>
+                        </div>
+                        <div class="transaction-amount ${transaction.tipo === 'Receita' ? 'positive' : 'negative'}">
+                            ${transaction.tipo === 'Receita' ? '+' : '-'}${formatCurrency(Math.abs(transaction.valor))}
+                        </div>
+                        <div class="transaction-actions">
+                            <button class="edit-transaction-btn" data-id="${transaction.id}" title="Editar Lançamento"><i class="fas fa-edit"></i></button>
+                            <button class="delete-transaction-btn" data-id="${transaction.id}" title="Excluir Lançamento"><i class="fas fa-trash-alt"></i></button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Adiciona os event listeners após o HTML ser renderizado
             document.querySelectorAll('.edit-transaction-btn').forEach(button => button.addEventListener('click', (event) => { const transactionId = event.currentTarget.dataset.id; const transactionToEdit = allTransactions.find(t => t.id === transactionId); if (transactionToEdit) openEditTransactionModal(transactionToEdit); else showFeedback('Erro: Não foi possível encontrar os dados desta transação para editar.', 'error'); }));
             document.querySelectorAll('.delete-transaction-btn').forEach(button => button.addEventListener('click', (event) => confirmDeleteTransaction(event.currentTarget.dataset.id, 'Lançamento')));
         }
@@ -2033,17 +2095,18 @@
         }
 
         // Função de sucesso ATUALIZADA
-        function onSuccess(data, selectedMonth, selectedYear) {
+        function onSuccess(data, selectedMonth, selectedYear, newTransactionId = null) {
             hideLoading();
             allAccounts = data.accounts || [];
             allCategories = data.categories || {};
             allPaymentMethods = data.paymentMethods || [];
             allTransactions = data.recentTransactions || [];
             renderSummary(data.summary);
+            renderNetWorth(data.netWorth); // <-- CHAMADA DA NOVA FUNÇÃO
             renderAccountBalances(data.accountBalances);
             renderCreditCards(data.creditCardSummaries);
             renderBillsToPay(data.billsToPay);
-            renderRecentTransactions(allTransactions); 
+            renderRecentTransactions(allTransactions, newTransactionId); 
             renderGoalsProgress(data.goalsProgress);
             renderBudgetProgress(data.budgetProgress);
             renderExpenseChart(data.expensesByCategory);
@@ -2348,15 +2411,17 @@
 
             if (typeof google !== 'undefined' && google.script && google.script.run) {
                 const handler = (response) => {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Salvar Lançamento';
                     if (response.success) {
                         transactionModal.classList.remove('show');
                         showFeedback(`Lançamento ${isEditing ? 'atualizado' : 'salvo'} com sucesso!`, 'success');
-                        loadDashboardData();
+                        const selectedMonth = new Date(transactionData.date).getMonth();
+                        const selectedYear = new Date(transactionData.date).getFullYear();
+                        onSuccess(response.dashboardData, selectedMonth, selectedYear, isEditing ? transactionData.id : response.newTransactionId);
                     } else {
                         showFeedback(`Erro ao ${isEditing ? 'atualizar' : 'salvar'} lançamento: ` + response.message, 'error');
                     }
-                    submitButton.disabled = false;
-                    submitButton.textContent = 'Salvar Lançamento';
                 };
                 const errorHandler = (error) => {
                     showFeedback('Erro ao comunicar com o servidor: ' + error.message, 'error');
@@ -2412,14 +2477,16 @@
                 google.script.run
                     .withSuccessHandler(function(response) {
                         confirmDeleteModal.classList.remove('show');
+                        confirmDeleteBtn.disabled = false;
+                        confirmDeleteBtn.textContent = 'Excluir';
                         if (response.success) {
                             showFeedback('Lançamento excluído com sucesso!', 'success');
-                            loadDashboardData();
+                            const selectedMonth = parseInt(document.getElementById('month-select').value);
+                            const selectedYear = parseInt(document.getElementById('year-input').value);
+                            onSuccess(response.dashboardData, selectedMonth, selectedYear);
                         } else {
                             showFeedback('Erro ao excluir lançamento: ' + response.message, 'error');
                         }
-                        confirmDeleteBtn.disabled = false;
-                        confirmDeleteBtn.textContent = 'Excluir';
                     })
                     .withFailureHandler(function(error) {
                         confirmDeleteModal.classList.remove('show');
@@ -2513,14 +2580,16 @@
             google.script.run
                 .withSuccessHandler(response => {
                     confirmDeleteModal.classList.remove('show');
+                    confirmDeleteBtn.disabled = false;
+                    confirmDeleteBtn.textContent = 'Excluir';
                     if (response.success) {
                         showFeedback('Conta excluída com sucesso!', 'success');
-                        loadDashboardData();
+                        const selectedMonth = parseInt(document.getElementById('month-select').value);
+                        const selectedYear = parseInt(document.getElementById('year-input').value);
+                        onSuccess(response.dashboardData, selectedMonth, selectedYear);
                     } else {
                         showFeedback('Erro ao excluir conta: ' + response.message, 'error');
                     }
-                    confirmDeleteBtn.disabled = false;
-                    confirmDeleteBtn.textContent = 'Excluir';
                 })
                 .withFailureHandler(error => {
                     confirmDeleteModal.classList.remove('show');
@@ -2548,15 +2617,17 @@
 
             google.script.run
                 .withSuccessHandler(response => {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Salvar';
                     if (response.success) {
                         accountModal.classList.remove('show');
                         showFeedback(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`, 'success');
-                        loadDashboardData();
+                        const selectedMonth = parseInt(document.getElementById('month-select').value);
+                        const selectedYear = parseInt(document.getElementById('year-input').value);
+                        onSuccess(response.dashboardData, selectedMonth, selectedYear);
                     } else {
-                        showFeedback(`Erro: ${response.message}`, 'error');
+                        showFeedback(`Erro: ${response.message}`, "error");
                     }
-                    submitButton.disabled = false;
-                    submitButton.textContent = 'Salvar';
                 })
                 .withFailureHandler(error => {
                     showFeedback('Erro ao comunicar com o servidor.', 'error');
