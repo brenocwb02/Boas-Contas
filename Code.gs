@@ -203,7 +203,7 @@ function doPost(e) {
           "adicionar_conta", "listar_contas", "adicionar_categoria", "listar_categorias", 
           "listar_subcategorias", "tarefa", "lembrete", "tarefas", "agenda", "concluir", 
           "excluir_tarefa", "saude",
-          "orcamento", "metas", "novameta", "aportarmeta" // <-- NOVOS COMANDOS ADICIONADOS
+          "orcamento", "metas", "novameta", "aportarmeta", "patrimonio" // <-- ADICIONADO
       ];
 
       if (comandosConhecidosSemBarra.includes(comandoNormalizado)) {
@@ -505,6 +505,10 @@ function doPost(e) {
       case "/saldo":
           logToSheet(`Comando /saldo detectado.`, "INFO");
           enviarSaldo(chatId, usuario);
+          return;
+      case "/patrimonio": // <-- NOVO CASE ADICIONADO
+          logToSheet(`Comando /patrimonio detectado.`, "INFO");
+          enviarPatrimonioLiquido(chatId);
           return;
       case "/proximasfaturas":
           logToSheet(`Comando /proximasfaturas detectado.`, "INFO");
