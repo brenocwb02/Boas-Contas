@@ -111,9 +111,16 @@ function getAccountBalancesForMonth(dadosTransacoes, dadosContas, mes, ano) {
     dadosContas.slice(1).forEach(row => {
         const nomeOriginal = (row[0] || "").trim();
         const tipo = (row[1] || "").toLowerCase().trim();
+        const banco = (row[2] || "").trim();
+        const saldoInicial = parseBrazilianFloat(String(row[3] || '0'));
+
         if ((tipo === 'conta corrente' || tipo === 'dinheiro físico') && nomeOriginal) {
-            const saldoInicial = parseBrazilianFloat(String(row[3] || '0'));
-            balancesMap[nomeOriginal] = saldoInicial;
+            balancesMap[nomeOriginal] = {
+                saldo: saldoInicial,
+                tipo: tipo,
+                banco: banco,
+                saldoInicial: saldoInicial
+            };
         }
     });
 
@@ -125,16 +132,19 @@ function getAccountBalancesForMonth(dadosTransacoes, dadosContas, mes, ano) {
 
         if (dataTransacao && dataTransacao <= endDate && balancesMap.hasOwnProperty(conta)) {
             if (tipoTransacao === 'receita') {
-                balancesMap[conta] += valor;
+                balancesMap[conta].saldo += valor;
             } else if (tipoTransacao === 'despesa') {
-                balancesMap[conta] -= valor;
+                balancesMap[conta].saldo -= valor;
             }
         }
     });
 
-    return Object.entries(balancesMap).map(([nome, saldo]) => ({
+    return Object.entries(balancesMap).map(([nome, data]) => ({
         nomeOriginal: nome,
-        saldo: round(saldo, 2)
+        saldo: round(data.saldo, 2),
+        tipo: data.tipo,
+        banco: data.banco,
+        saldoInicial: data.saldoInicial
     }));
 }
 
@@ -465,6 +475,7 @@ function getDashboardData(mes, ano) {
   const goalsProgress = _getGoalsProgress(dadosMetas, categoryIconsMap);
   const budgetProgress = _getBudgetProgress(dadosOrcamento, dadosTransacoes, currentMonth, currentYear, categoryIconsMap);
   const expensesByCategoryArray = _getExpensesByCategoryChartData(dadosTransacoes, currentMonth, currentYear, categoryIconsMap);
+  const netWorthData = calculateNetWorth(); // <-- ADICIONADO
   
   const categoriasMap = getCategoriesMap();
   const needsWantsSummary = _getNeedsWantsSummary(dadosTransacoes, categoriasMap, currentMonth, currentYear);
@@ -481,6 +492,7 @@ function getDashboardData(mes, ano) {
     budgetProgress: budgetProgress,
     expensesByCategory: expensesByCategoryArray,
     needsWantsSummary: needsWantsSummary,
+    netWorth: netWorthData, // <-- ADICIONADO
     accounts: getAccountsForDropdown(dadosContas),
     categories: getCategoriesForDropdown(dadosCategorias),
     paymentMethods: getPaymentMethodsForDropdown()
@@ -531,16 +543,21 @@ function getTransactionsByCategory(categoryName, month, year) {
 }
 
 /**
+ * **ATUALIZADO COM LOCKSERVICE E RETORNO DINÂMICO**
  * Adiciona uma nova transação à planilha "Transacoes" a partir do formulário web.
  * @param {Object} transactionData Objeto contendo os dados da transação.
- * @returns {Object} Um objeto indicando sucesso ou falha.
+ * @returns {Object} Um objeto indicando sucesso ou falha e os dados atualizados do dashboard.
  */
 function addTransactionFromWeb(transactionData) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('Transacoes');
     if (!sheet) throw new Error("Planilha 'Transacoes' não encontrada.");
 
+    const newTransactionId = Utilities.getUuid();
+    
     let formattedDueDate = '';
     if (transactionData.dueDate) {
       const dateObject = new Date(transactionData.dueDate + 'T00:00:00');
@@ -565,25 +582,37 @@ function addTransactionFromWeb(transactionData) {
       transactionData.installments,
       1,
       formattedDueDate,
-      '', // Observações
+      '', // Usuário (será preenchido se necessário no futuro)
       'Ativo',
-      Utilities.getUuid(),
+      newTransactionId,
       Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss")
     ];
 
     sheet.appendRow(newRow);
-    return { success: true, message: 'Transação adicionada com sucesso.' };
+    atualizarSaldosDasContas(); 
+    
+    const today = new Date(transactionData.date);
+    const dashboardData = getDashboardData(today.getMonth() + 1, today.getFullYear());
+    
+    return { 
+      success: true, 
+      message: 'Transação adicionada com sucesso.',
+      newTransactionId: newTransactionId,
+      dashboardData: dashboardData 
+    };
   } catch (e) {
     handleError(e, "addTransactionFromWeb");
     return { success: false, message: 'Erro ao adicionar transação: ' + e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 /**
- * ATUALIZADA: Deleta uma transação da planilha 'Transacoes' a partir do Dashboard.
- * Se o lançamento for um "Aporte Meta", o valor é revertido na aba "Metas".
+ * **ATUALIZADO COM LOCKSERVICE E RETORNO DINÂMICO**
+ * Deleta uma transação da planilha 'Transacoes' a partir do Dashboard.
  * @param {string} transactionId O ID único da transação a ser deletada.
- * @returns {object} Um objeto com status de sucesso ou erro.
+ * @returns {object} Um objeto com status de sucesso ou erro e os dados atualizados do dashboard.
  */
 function deleteTransactionFromWeb(transactionId) {
   const lock = LockService.getScriptLock();
@@ -598,24 +627,24 @@ function deleteTransactionFromWeb(transactionId) {
     const idColumnIndex = headers.indexOf('ID Transacao');
     const descColumnIndex = headers.indexOf('Descricao');
     const valueColumnIndex = headers.indexOf('Valor');
+    const dateColumnIndex = headers.indexOf('Data');
     
-    if (idColumnIndex === -1 || descColumnIndex === -1 || valueColumnIndex === -1) {
-      throw new Error("Colunas essenciais (ID Transacao, Descricao, Valor) não encontradas.");
+    if (idColumnIndex === -1 || descColumnIndex === -1 || valueColumnIndex === -1 || dateColumnIndex === -1) {
+      throw new Error("Colunas essenciais não encontradas.");
     }
 
     const rowIndexToDelete = data.slice(1).findIndex(row => row[idColumnIndex] == transactionId);
 
     if (rowIndexToDelete !== -1) {
       const rowData = data[rowIndexToDelete + 1];
+      const transactionDate = parseData(rowData[dateColumnIndex]);
       const description = rowData[descColumnIndex];
       const value = parseBrazilianFloat(String(rowData[valueColumnIndex]));
 
-      // ### INÍCIO DA NOVA LÓGICA ###
       if (description.startsWith("Aporte Meta:")) {
         const metaName = description.substring("Aporte Meta:".length).trim();
         reverterAporteMeta(metaName, value);
       }
-      // ### FIM DA NOVA LÓGICA ###
       
       reverterStatusContaAPagarSeVinculado(transactionId);
 
@@ -624,7 +653,8 @@ function deleteTransactionFromWeb(transactionId) {
       
       atualizarSaldosDasContas();
       
-      return { success: true, message: `Transação excluída com sucesso.` };
+      const dashboardData = getDashboardData(transactionDate.getMonth() + 1, transactionDate.getFullYear());
+      return { success: true, message: `Transação excluída com sucesso.`, dashboardData: dashboardData };
     } else {
       return { success: false, message: `Transação com ID ${transactionId} não encontrada.` };
     }
@@ -637,9 +667,10 @@ function deleteTransactionFromWeb(transactionId) {
 }
 
 /**
- * Atualiza uma transação existente com verificação de cabeçalhos.
+ * **ATUALIZADO COM LOCKSERVICE E RETORNO DINÂMICO**
+ * Atualiza uma transação existente.
  * @param {Object} transactionData Objeto com os dados da transação.
- * @returns {Object} Objeto indicando sucesso ou falha.
+ * @returns {Object} Objeto indicando sucesso ou falha e os dados atualizados do dashboard.
  */
 function updateTransactionFromWeb(transactionData) {
   const lock = LockService.getScriptLock();
@@ -652,10 +683,6 @@ function updateTransactionFromWeb(transactionData) {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const colMap = getColumnMap(headers);
-
-    const requiredColumns = ["Data", "Descricao", "Categoria", "Subcategoria", "Tipo", "Valor", "Metodo de Pagamento", "Conta/Cartão", "Parcelas Totais", "Data de Vencimento", "ID Transacao"];
-    const missingColumns = requiredColumns.filter(col => colMap[col.trim()] === undefined);
-    if (missingColumns.length > 0) throw new Error(`Colunas não encontradas: ${missingColumns.join(', ')}.`);
 
     const idColumn = colMap["ID Transacao"];
     const rowIndexToUpdate = data.slice(1).findIndex(row => row[idColumn] === transactionData.id);
@@ -674,7 +701,11 @@ function updateTransactionFromWeb(transactionData) {
       sheet.getRange(rowIndex, colMap["Data de Vencimento"] + 1).setValue(new Date((transactionData.dueDate || transactionData.date) + 'T00:00:00'));
       
       atualizarSaldosDasContas();
-      return { success: true, message: 'Transação atualizada com sucesso.' };
+      
+      const transactionDate = new Date(transactionData.date);
+      const dashboardData = getDashboardData(transactionDate.getMonth() + 1, transactionDate.getFullYear());
+      
+      return { success: true, message: 'Transação atualizada com sucesso.', dashboardData: dashboardData };
     }
     throw new Error("Transação não encontrada para atualização.");
   } catch (e) {
@@ -684,6 +715,7 @@ function updateTransactionFromWeb(transactionData) {
     lock.releaseLock();
   }
 }
+
 
 /**
  * Retorna uma lista de contas e cartões para popular um dropdown.
@@ -737,11 +769,10 @@ function showDashboard() {
 // ### FIM DA ATUALIZAÇÃO ###
 
 /**
+ * **ATUALIZADO COM RETORNO DINÂMICO**
  * Adiciona ou atualiza uma conta na aba 'Contas'.
  * @param {Object} accountData - Dados da conta a serem salvos.
- * { originalName: 'Nome Antigo' (opcional, para edição), 
- * name: 'Nome Novo', type: 'Tipo', bank: 'Banco', initialBalance: 100 }
- * @returns {Object} Objeto com status de sucesso ou erro.
+ * @returns {Object} Objeto com status de sucesso ou erro e os dados atualizados do dashboard.
  */
 function addOrUpdateAccountFromWeb(accountData) {
   const lock = LockService.getScriptLock();
@@ -759,10 +790,9 @@ function addOrUpdateAccountFromWeb(accountData) {
     const isEditing = !!accountData.originalName;
     let rowIndexToUpdate = -1;
 
-    // Verifica se o novo nome já existe (exceto se for o nome original)
     const newNameExists = data.slice(1).some((row, index) => {
         if (isEditing && row[nameColIndex] === accountData.originalName) {
-            rowIndexToUpdate = index + 2; // +2 para linha real
+            rowIndexToUpdate = index + 2;
             return false;
         }
         return row[nameColIndex] === accountData.name;
@@ -773,7 +803,6 @@ function addOrUpdateAccountFromWeb(accountData) {
     }
     
     if (isEditing && rowIndexToUpdate === -1) {
-        // Se estava a editar mas o nome original não foi encontrado
         rowIndexToUpdate = data.slice(1).findIndex(row => row[nameColIndex] === accountData.originalName) + 2;
         if(rowIndexToUpdate < 2) throw new Error(`Conta original "${accountData.originalName}" não encontrada para edição.`);
     }
@@ -783,7 +812,6 @@ function addOrUpdateAccountFromWeb(accountData) {
     const initialBalanceColIndex = headers.indexOf('Saldo Inicial');
 
     if (isEditing) {
-      // Atualiza a linha existente
       sheet.getRange(rowIndexToUpdate, nameColIndex + 1).setValue(accountData.name);
       if (typeColIndex > -1) sheet.getRange(rowIndexToUpdate, typeColIndex + 1).setValue(accountData.type);
       if (bankColIndex > -1) sheet.getRange(rowIndexToUpdate, bankColIndex + 1).setValue(accountData.bank);
@@ -791,20 +819,26 @@ function addOrUpdateAccountFromWeb(accountData) {
       logToSheet(`Conta '${accountData.originalName}' atualizada para '${accountData.name}'.`, "INFO");
 
     } else {
-      // Adiciona nova linha
       const newRow = Array(headers.length).fill('');
       newRow[nameColIndex] = accountData.name;
       newRow[typeColIndex] = accountData.type;
       newRow[bankColIndex] = accountData.bank;
       newRow[initialBalanceColIndex] = accountData.initialBalance;
-      newRow[headers.indexOf('Status')] = 'Ativo'; // Define como ativa por padrão
+      newRow[headers.indexOf('Status')] = 'Ativo';
       sheet.appendRow(newRow);
       logToSheet(`Nova conta '${accountData.name}' adicionada.`, "INFO");
     }
 
-    // Recalcula todos os saldos após a alteração
     atualizarSaldosDasContas();
-    return { success: true, message: `Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso.` };
+    
+    const today = new Date();
+    const dashboardData = getDashboardData(today.getMonth() + 1, today.getFullYear());
+    
+    return { 
+      success: true, 
+      message: `Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso.`,
+      dashboardData: dashboardData
+    };
 
   } catch (e) {
     handleError(e, "addOrUpdateAccountFromWeb");
@@ -815,9 +849,10 @@ function addOrUpdateAccountFromWeb(accountData) {
 }
 
 /**
+ * **ATUALIZADO COM RETORNO DINÂMICO**
  * Exclui uma conta da aba 'Contas'.
  * @param {string} accountName - O nome da conta a ser excluída.
- * @returns {Object} Objeto com status de sucesso ou erro.
+ * @returns {Object} Objeto com status de sucesso ou erro e os dados atualizados do dashboard.
  */
 function deleteAccountFromWeb(accountName) {
   const lock = LockService.getScriptLock();
@@ -827,7 +862,6 @@ function deleteAccountFromWeb(accountName) {
     const sheet = ss.getSheetByName(SHEET_CONTAS);
     if (!sheet) throw new Error(`Aba "${SHEET_CONTAS}" não encontrada.`);
     
-    // Adicionar verificação de transações vinculadas antes de excluir
     const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
     const dadosTransacoes = transacoesSheet.getDataRange().getValues();
     const contaColIndexTrans = dadosTransacoes[0].indexOf('Conta/Cartão');
@@ -844,7 +878,15 @@ function deleteAccountFromWeb(accountName) {
     if (rowIndexToDelete !== -1) {
       sheet.deleteRow(rowIndexToDelete + 2);
       logToSheet(`Conta '${accountName}' excluída.`, "INFO");
-      return { success: true, message: 'Conta excluída com sucesso.' };
+      
+      const today = new Date();
+      const dashboardData = getDashboardData(today.getMonth() + 1, today.getFullYear());
+      
+      return { 
+        success: true, 
+        message: 'Conta excluída com sucesso.',
+        dashboardData: dashboardData
+      };
     } else {
       throw new Error(`Conta "${accountName}" não encontrada para exclusão.`);
     }
