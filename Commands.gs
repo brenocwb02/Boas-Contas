@@ -2427,3 +2427,173 @@ function handleAportarMetaCommand(chatId, complemento, usuario) {
 // ### FIM DA ATUALIZAÇÃO ###
 // ===================================================================================
 
+
+/**
+ * **ATUALIZADO COM LOCKSERVICE**
+ * Processa o comando /gasto, /compra, etc., para adicionar uma nova despesa.
+ * @param {string} chatId O ID do chat do usuário.
+ * @param {string} text O texto da mensagem.
+ * @param {string} command O comando que iniciou a chamada (ex: "gasto").
+ */
+function processarComandoGasto(chatId, text, command) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    // ... (o código interno da função permanece o mesmo)
+    const dados = extrairDadosGasto(text, command);
+    if (!dados) {
+      sendMessage(chatId, `Formato inválido. Use: \`/${command} <valor> <descrição>\``);
+      return;
+    }
+    adicionarTransacao(chatId, dados.valor, dados.descricao, "Despesa");
+    atualizarSaldosDasContas();
+  } catch (e) {
+    handleError(e, "processarComandoGasto", chatId);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * **ATUALIZADO COM LOCKSERVICE**
+ * Processa o comando /receita, /ganhei, etc., para adicionar uma nova receita.
+ * @param {string} chatId O ID do chat do usuário.
+ * @param {string} text O texto da mensagem.
+ * @param {string} command O comando que iniciou a chamada (ex: "receita").
+ */
+function processarComandoReceita(chatId, text, command) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    // ... (o código interno da função permanece o mesmo)
+    const dados = extrairDadosGasto(text, command);
+    if (!dados) {
+      sendMessage(chatId, `Formato inválido. Use: \`/${command} <valor> <descrição>\``);
+      return;
+    }
+    adicionarTransacao(chatId, dados.valor, dados.descricao, "Receita");
+    atualizarSaldosDasContas();
+  } catch (e) {
+    handleError(e, "processarComandoReceita", chatId);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * **ATUALIZADO COM LOCKSERVICE**
+ * Processa o comando /excluir para remover a última transação ou uma transação específica.
+ * @param {string} chatId O ID do chat do usuário.
+ * @param {string} text O texto completo da mensagem do usuário.
+ */
+function processarComandoExcluir(chatId, text) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TRANSACOES);
+    if (!sheet) {
+      sendMessage(chatId, "❌ A aba de transações não foi encontrada.");
+      return;
+    }
+
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+    
+    if (values.length < 2) {
+      sendMessage(chatId, "ℹ️ Não há nenhuma transação para excluir.");
+      return;
+    }
+
+    const lastRowIndex = values.length;
+    const lastRowData = values[lastRowIndex - 1];
+    
+    const descricao = lastRowData[1];
+    const valor = formatarMoeda(lastRowData[5]);
+    const data = lastRowData[0];
+
+    if (descricao.startsWith("Aporte Meta:")) {
+      const metaName = descricao.substring("Aporte Meta:".length).trim();
+      reverterAporteMeta(metaName, parseBrazilianFloat(String(lastRowData[5])));
+    }
+
+    const transactionId = lastRowData[13];
+    if (transactionId) {
+      reverterStatusContaAPagarSeVinculado(transactionId);
+    }
+
+    sheet.deleteRow(lastRowIndex);
+    
+    atualizarSaldosDasContas();
+
+    const mensagem = `✅ Transação excluída com sucesso:\n\n*Descrição:* ${descricao}\n*Valor:* ${valor}\n*Data:* ${data}`;
+    sendMessage(chatId, mensagem);
+    logToSheet(`Transação excluída para ${chatId}: ${descricao}`, "INFO");
+
+  } catch (e) {
+    handleError(e, "processarComandoExcluir", chatId);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * **ATUALIZADO COM LOCKSERVICE**
+ * Processa o comando /transferir para mover valores entre contas.
+ * @param {string} chatId O ID do chat do usuário.
+ * @param {string} text O texto da mensagem.
+ */
+function processarComandoTransferencia(chatId, text) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    // ... (o código interno da função permanece o mesmo)
+    const regex = /transferir\s+([\d,.]+)\s+de\s+(.+?)\s+para\s+(.+)/i;
+    const match = text.match(regex);
+
+    if (!match) {
+        sendMessage(chatId, "Formato inválido. Use: `/transferir <valor> de <conta_origem> para <conta_destino>`");
+        return;
+    }
+
+    const valor = parseBrazilianFloat(match[1]);
+    const contaOrigem = match[2].trim();
+    const contaDestino = match[3].trim();
+
+    adicionarTransferencia(chatId, valor, contaOrigem, contaDestino);
+    atualizarSaldosDasContas();
+  } catch (e) {
+    handleError(e, "processarComandoTransferencia", chatId);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * NOVO: Envia o Patrimônio Líquido para o chat do Telegram.
+ * @param {string} chatId O ID do chat do Telegram.
+ */
+function enviarPatrimonioLiquido(chatId) {
+  try {
+    const netWorthData = calculateNetWorth(); // Chama a função do Patrimonio.gs
+    
+    const mensagem = `
+🏛️ *Visão Geral do seu Patrimônio*
+
+*Ativos:* ${formatCurrency(netWorthData.assets)}
+(Seus bens e investimentos)
+
+*Passivos:* ${formatCurrency(netWorthData.liabilities)}
+(Suas dívidas e financiamentos)
+
+------------------------------------
+*Patrimônio Líquido:* *${formatCurrency(netWorthData.netWorth)}*
+`;
+
+    enviarMensagemTelegram(chatId, mensagem);
+    logToSheet(`Patrimônio Líquido enviado para ${chatId}.`, "INFO");
+
+  } catch (e) {
+    handleError(e, "enviarPatrimonioLiquido", chatId);
+  }
+}
