@@ -864,8 +864,9 @@ function calcularVencimentoCartaoParaParcela(infoConta, dataPrimeiraParcelaVenci
  * e os armazena na variável global `globalThis.saldosCalculados`.
  */
 function atualizarSaldosDasContas() {
+  // Adiciona um bloqueio para garantir que apenas uma instância desta função seja executada de cada vez.
   const lock = LockService.getScriptLock();
-  lock.waitLock(30000); 
+  lock.waitLock(30000); // Espera até 30 segundos pelo acesso exclusivo.
 
   try {
     logToSheet("Iniciando atualizacao de saldos das contas.", "INFO");
@@ -989,7 +990,7 @@ function atualizarSaldosDasContas() {
   } catch (e) {
     handleError(e, "atualizarSaldosDasContas");
   } finally {
-    lock.releaseLock();
+    lock.releaseLock(); // Libera o bloqueio para que outras operações possam ser executadas.
   }
 }
 
@@ -1504,4 +1505,86 @@ function reverterStatusContaAPagarSeVinculado(idLancamento) {
   } catch (e) {
     handleError(e, "reverterStatusContaAPagarSeVinculado");
   }
+}
+
+/**
+ * Calcula e retorna um resumo da saúde financeira do usuário.
+ * @param {string} chatId O ID do chat do usuário.
+ * @returns {string} Uma mensagem formatada com o resumo da saúde financeira.
+ */
+function getSaudeFinanceira(chatId) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+    const dadosTransacoes = transacoesSheet.getDataRange().getValues();
+    
+    const hoje = new Date();
+    const primeiroDiaDoMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const ultimoDiaDoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+
+    let totalReceitas = 0;
+    let totalDespesas = 0;
+    let despesasEssenciais = 0;
+    let despesasNaoEssenciais = 0;
+
+    const categoriasMap = getCategoriesMap();
+
+    for (let i = 1; i < dadosTransacoes.length; i++) {
+        const row = dadosTransacoes[i];
+        const dataTransacao = parseData(row[0]);
+
+        if (dataTransacao >= primeiroDiaDoMes && dataTransacao <= ultimoDiaDoMes) {
+            const tipo = row[4];
+            const valor = parseBrazilianFloat(String(row[5]));
+            const categoria = normalizarTexto(row[2]);
+            const subcategoria = normalizarTexto(row[3]);
+
+            const isIgnored = (categoria === "contas a pagar" && subcategoria === "pagamento de fatura") ||
+                              (categoria === "transferencias" && subcategoria === "entre contas");
+
+            if (!isIgnored) {
+                if (tipo === 'Receita') {
+                    totalReceitas += valor;
+                } else if (tipo === 'Despesa') {
+                    totalDespesas += valor;
+                    const categoriaInfo = categoriasMap[categoria];
+                    if (categoriaInfo && categoriaInfo.tipoGasto === 'necessidade') {
+                        despesasEssenciais += valor;
+                    } else {
+                        despesasNaoEssenciais += valor;
+                    }
+                }
+            }
+        }
+    }
+
+    const saldoMes = totalReceitas - totalDespesas;
+    const taxaDePoupanca = totalReceitas > 0 ? (saldoMes / totalReceitas) * 100 : 0;
+    const rendimentoComprometido = totalReceitas > 0 ? (totalDespesas / totalReceitas) * 100 : 0;
+    const diasNoMes = hoje.getDate();
+    const gastoDiarioMedio = diasNoMes > 0 ? totalDespesas / diasNoMes : 0;
+
+    let mensagem = `? *Resumo da sua Saúde Financeira - ${getNomeMes(hoje.getMonth())}* 💚\n\n`;
+    mensagem += `📊 *Visão Geral do Mês:*\n`;
+    mensagem += `   - *Receitas:* ${formatarMoeda(totalReceitas)}\n`;
+    mensagem += `   - *Despesas:* ${formatarMoeda(totalDespesas)}\n`;
+    mensagem += `   - *Saldo:* ${formatarMoeda(saldoMes)}\n\n`;
+
+    mensagem += `💡 *Indicadores Chave:*\n`;
+    mensagem += `   - *Taxa de Poupança:* \`${taxaDePoupanca.toFixed(2)}%\`\n`;
+    mensagem += `     _(O ideal é acima de 10-20%. Quanto maior, melhor!)_\n`;
+    mensagem += `   - *Rendimento Comprometido:* \`${rendimentoComprometido.toFixed(2)}%\`\n`;
+    mensagem += `     _(Mostra quanto da sua renda já foi gasta. O ideal é mantê-lo baixo.)_\n`;
+    mensagem += `   - *Gasto Diário Médio:* \`${formatarMoeda(gastoDiarioMedio)}\`\n\n`;
+
+    mensagem += `⚖️ *Balanço (Necessidades vs. Desejos):*\n`;
+    mensagem += `   - *Gastos Essenciais:* ${formatarMoeda(despesasEssenciais)}\n`;
+    mensagem += `   - *Gastos Não Essenciais:* ${formatarMoeda(despesasNaoEssenciais)}\n\n`;
+
+    if (taxaDePoupanca < 10 && totalReceitas > 0) {
+        mensagem += `⚠️ *Ponto de Atenção:* Sua taxa de poupança está um pouco baixa. Tente rever os gastos não essenciais para impulsionar suas economias!`;
+    } else if (taxaDePoupanca > 20) {
+        mensagem += `🎉 *Parabéns!* Você está com uma excelente taxa de poupança. Continue assim!`;
+    }
+
+    return mensagem;
 }
