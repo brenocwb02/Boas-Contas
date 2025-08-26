@@ -897,3 +897,60 @@ function deleteAccountFromWeb(accountName) {
     lock.releaseLock();
   }
 }
+
+
+// ===================================================================================
+// ##      INÍCIO DO NOVO CÓDIGO DE PERSONALIZAÇÃO DO DASHBOARD (BACKEND)          ##
+// ===================================================================================
+
+/**
+ * Salva as preferências de layout do dashboard para o usuário atual.
+ * @param {string} layoutConfigJSON Uma string JSON contendo a ordem e a visibilidade dos cards.
+ * @returns {Object} Um objeto com o status da operação.
+ */
+function saveDashboardLayout(layoutConfigJSON) {
+  try {
+    // Usamos 'user properties' para salvar dados específicos de cada usuário.
+    PropertiesService.getUserProperties().setProperty('DASHBOARD_LAYOUT', layoutConfigJSON);
+    Logger.log('Layout salvo para o usuário: ' + layoutConfigJSON);
+    return { status: 'success', message: 'Layout salvo com sucesso!' };
+  } catch (e) {
+    Logger.log('Erro ao salvar o layout: ' + e.toString());
+    return { status: 'error', message: 'Erro ao salvar layout: ' + e.toString() };
+  }
+}
+
+/**
+ * Recupera as preferências de layout do dashboard para o usuário atual.
+ * @returns {string} Uma string JSON com as configurações de layout salvas, ou um layout padrão.
+ */
+function getDashboardLayout() {
+  try {
+    const savedLayout = PropertiesService.getUserProperties().getProperty('DASHBOARD_LAYOUT');
+    if (savedLayout) {
+      Logger.log('Layout encontrado para o usuário: ' + savedLayout);
+      return savedLayout;
+    } else {
+      // Se o usuário nunca salvou um layout, retorna uma configuração padrão.
+      // Os IDs aqui devem corresponder aos IDs das seções no HTML.
+      const defaultLayout = {
+        order: ["summary-grid-section", "account-balances-section", "main-grid-section"],
+        hidden: []
+      };
+      Logger.log('Nenhum layout encontrado. Usando o padrão.');
+      return JSON.stringify(defaultLayout);
+    }
+  } catch (e) {
+    Logger.log('Erro ao recuperar o layout: ' + e.toString());
+    // Em caso de erro, retorna o layout padrão para não quebrar a interface.
+    const defaultLayout = {
+        order: ["summary-grid-section", "account-balances-section", "main-grid-section"],
+        hidden: []
+    };
+    return JSON.stringify(defaultLayout);
+  }
+}
+
+// ===================================================================================
+// ##       FIM DO NOVO CÓDIGO DE PERSONALIZAÇÃO DO DASHBOARD (BACKEND)            ##
+// ===================================================================================
