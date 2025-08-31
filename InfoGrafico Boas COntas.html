@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infográfico: O Poder do Sistema Boas Contas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <!-- Palette Name: Energetic & Playful -->
+    <!-- Narrative Plan:
+        1. Hook: Apresentar o benefício principal do controlo financeiro.
+        2. Section 1: Demonstrar a simplicidade do registo de transações (texto e voz).
+        3. Section 2: Visualizar a variedade e o poder dos comandos principais.
+        4. Section 3: Mostrar a clareza do Dashboard Web com múltiplos gráficos.
+        5. Section 4: Destacar funcionalidades avançadas como investimentos e divisão de despesas.
+        6. Section 5: Apresentar o conceito de autoconhecimento financeiro através do Quiz de Perfil.
+        7. CTA: Guiar o utilizador através do processo de configuração simples.
+    -->
+    <!-- Visualization Choices:
+        - Big Number (Hook): Goal: Inform. Viz: Large Text. Justification: Impacto imediato. NO SVG.
+        - Transaction Flow: Goal: Organize. Viz: Flowchart (HTML/CSS). Justification: Mostrar o processo simples de registo. NO SVG.
+        - Main Commands: Goal: Organize. Viz: Icon Grid (HTML/CSS + Unicode). Justification: Apresentar funcionalidades de forma visual. NO SVG.
+        - Expenses by Category: Goal: Compare. Viz: Bar Chart (Chart.js). Justification: Ideal para comparar múltiplas categorias. NO SVG.
+        - Needs vs. Wants: Goal: Compare Composition. Viz: Donut Chart (Chart.js). Justification: Perfeito para mostrar a proporção dos gastos. NO SVG.
+        - Financial Profiles: Goal: Compare. Viz: Radar Chart (Chart.js). Justification: Excelente para comparar pontuações em múltiplos eixos. NO SVG.
+        - Setup Steps: Goal: Organize. Viz: Numbered List (HTML/CSS). Justification: Simples e claro para guiar o utilizador. NO SVG.
+    -->
+    <!-- Confirmation: NEITHER Mermaid JS NOR SVG were used anywhere in this output. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #073B4C; }
+        .kpi-number { font-size: 6rem; line-height: 1; font-weight: 900; background: linear-gradient(45deg, #FFD166, #06D6A0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 350px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 400px; max-height: 500px; } }
+        .gradient-text { background: linear-gradient(45deg, #FFD166, #06D6A0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .flow-arrow::after { content: '→'; font-size: 2rem; color: #118AB2; margin: 0 1rem; }
+        .flow-arrow:last-child::after { content: ''; }
+    </style>
+</head>
+<body class="text-slate-100">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
+
+        <header class="text-center mb-16 md:mb-24">
+            <h1 class="text-4xl md:text-6xl font-black text-white mb-4">Tome o <span class="gradient-text">Controlo Total</span> das Suas Finanças</h1>
+            <p class="text-lg md:text-xl text-slate-300 max-w-3xl mx-auto">Descubra como o sistema "Boas Contas" transforma a gestão financeira numa tarefa simples, inteligente e até mesmo divertida.</p>
+        </header>
+
+        <section id="registro" class="text-center mb-16 md:mb-24">
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Registo Simples e Inteligente</h2>
+            <p class="text-slate-300 max-w-2xl mx-auto mb-12">Esqueça as planilhas complicadas. Registe as suas transações como se estivesse a conversar, seja por texto ou por voz.</p>
+            <div class="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 bg-[#118AB2]/20 p-8 rounded-2xl">
+                <div class="flow-arrow flex items-center p-4 bg-[#073B4C] rounded-lg">
+                    <span class="text-4xl mr-4">✍️</span>
+                    <div>
+                        <h3 class="font-bold text-white">Texto</h3>
+                        <p class="text-slate-400 text-sm">"gastei 50 no mercado"</p>
+                    </div>
+                </div>
+                <div class="flow-arrow flex items-center p-4 bg-[#073B4C] rounded-lg">
+                    <span class="text-4xl mr-4">🎙️</span>
+                    <div>
+                        <h3 class="font-bold text-white">Voz</h3>
+                        <p class="text-slate-400 text-sm">Envie um áudio</p>
+                    </div>
+                </div>
+                <div class="flex items-center p-4 bg-[#073B4C] rounded-lg">
+                    <span class="text-4xl mr-4">✅</span>
+                    <div>
+                        <h3 class="font-bold text-white">Registado!</h3>
+                        <p class="text-slate-400 text-sm">O sistema processa e aprende</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="comandos" class="mb-16 md:mb-24">
+            <h2 class="text-3xl md:text-4xl font-bold text-white text-center mb-4">Comandos na Ponta dos Dedos</h2>
+            <p class="text-slate-300 max-w-2xl mx-auto text-center mb-12">Aceda a informações vitais instantaneamente com comandos simples e diretos no Telegram.</p>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div class="bg-[#118AB2]/30 p-6 rounded-2xl text-center flex flex-col items-center justify-center h-40">
+                    <span class="text-4xl mb-2">💰</span>
+                    <h3 class="font-bold text-lg text-white">/saldo</h3>
+                    <p class="text-slate-400 text-sm">Saldos de contas e cartões</p>
+                </div>
+                <div class="bg-[#118AB2]/30 p-6 rounded-2xl text-center flex flex-col items-center justify-center h-40">
+                    <span class="text-4xl mb-2">📊</span>
+                    <h3 class="font-bold text-lg text-white">/resumo</h3>
+                    <p class="text-slate-400 text-sm">Resumo do mês</p>
+                </div>
+                <div class="bg-[#118AB2]/30 p-6 rounded-2xl text-center flex flex-col items-center justify-center h-40">
+                    <span class="text-4xl mb-2">📄</span>
+                    <h3 class="font-bold text-lg text-white">/extrato</h3>
+                    <p class="text-slate-400 text-sm">Últimos lançamentos</p>
+                </div>
+                <div class="bg-[#118AB2]/30 p-6 rounded-2xl text-center flex flex-col items-center justify-center h-40">
+                    <span class="text-4xl mb-2">💸</span>
+                    <h3 class="font-bold text-lg text-white">/dividir</h3>
+                    <p class="text-slate-400 text-sm">Dividir despesas</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="dashboard" class="mb-16 md:mb-24">
+             <h2 class="text-3xl md:text-4xl font-bold text-white text-center mb-4">Uma Visão Completa no Dashboard Web</h2>
+            <p class="text-slate-300 max-w-2xl mx-auto text-center mb-12">Aceda ao seu dashboard com o comando <code class="bg-[#073B4C] px-2 py-1 rounded-md">/dashboard</code> para uma análise visual e interativa das suas finanças.</p>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                <div class="bg-[#1E293B] p-6 rounded-2xl">
+                    <h3 class="text-xl font-bold text-white mb-2">Para Onde Vai o Seu Dinheiro?</h3>
+                    <p class="text-slate-400 mb-6">O gráfico de despesas por categoria mostra claramente as áreas com maiores gastos no mês, ajudando a identificar onde pode economizar.</p>
+                    <div class="chart-container">
+                        <canvas id="expensesChart"></canvas>
+                    </div>
+                </div>
+                 <div class="bg-[#1E293B] p-6 rounded-2xl">
+                    <h3 class="text-xl font-bold text-white mb-2">Necessidades vs. Desejos</h3>
+                    <p class="text-slate-400 mb-6">Entenda a proporção dos seus gastos essenciais em comparação com os não essenciais. Este gráfico é fundamental para alinhar os seus gastos com os seus objetivos.</p>
+                    <div class="chart-container">
+                        <canvas id="needsWantsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="avancado" class="mb-16 md:mb-24">
+            <h2 class="text-3xl md:text-4xl font-bold text-white text-center mb-4">Funcionalidades Para o Próximo Nível</h2>
+            <p class="text-slate-300 max-w-2xl mx-auto text-center mb-12">Desde o controlo de investimentos até à gestão de dívidas partilhadas, o "Boas Contas" cresce consigo.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="bg-[#1E293B] p-8 rounded-2xl text-center">
+                    <span class="text-5xl">📈</span>
+                    <h3 class="text-2xl font-bold text-white mt-4 mb-2">Acompanhe a Sua Carteira</h3>
+                    <p class="text-slate-400">Registe a compra e venda de ativos e veja o seu património a evoluir diretamente no dashboard.</p>
+                </div>
+                 <div class="bg-[#1E293B] p-8 rounded-2xl text-center">
+                    <span class="text-5xl">🎯</span>
+                    <h3 class="text-2xl font-bold text-white mt-4 mb-2">Defina e Conquiste Metas</h3>
+                    <p class="text-slate-400">Crie metas de poupança com o comando <code class="bg-[#073B4C] px-2 py-1 rounded-md">/novameta</code> e acompanhe o seu progresso.</p>
+                </div>
+            </div>
+        </section>
+        
+        <section id="perfil" class="mb-16 md:mb-24">
+            <h2 class="text-3xl md:text-4xl font-bold text-white text-center mb-4">Conheça o Seu Perfil Financeiro</h2>
+            <p class="text-slate-300 max-w-2xl mx-auto text-center mb-12">Responda a um quiz rápido com o comando <code class="bg-[#073B4C] px-2 py-1 rounded-md">/meuperfil</code> e descubra o seu comportamento com o dinheiro para receber dicas ainda mais personalizadas.</p>
+             <div class="bg-[#1E293B] p-6 rounded-2xl">
+                <div class="chart-container" style="max-width: 500px; height: 350px;">
+                    <canvas id="profileChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <footer class="text-center border-t-2 border-[#118AB2]/50 pt-12">
+            <h2 class="text-3xl font-bold text-white mb-4">Pronto para começar?</h2>
+            <p class="text-slate-300 max-w-2xl mx-auto mb-8">A configuração é simples e leva menos de 5 minutos. Siga os passos na sua planilha após a inicialização.</p>
+            <div class="flex flex-col md:flex-row justify-center items-center gap-6 text-left">
+                <div class="bg-[#1E293B] p-6 rounded-xl flex items-center gap-4"><span class="text-3xl font-black text-[#FFD166]">1</span><div><h3 class="font-bold text-white">Inicializar Sistema</h3><p class="text-slate-400 text-sm">No menu "Gasto Certo"</p></div></div>
+                <div class="bg-[#1E293B] p-6 rounded-xl flex items-center gap-4"><span class="text-3xl font-black text-[#FFD166]">2</span><div><h3 class="font-bold text-white">Configurar Bot</h3><p class="text-slate-400 text-sm">Conecte o seu Telegram</p></div></div>
+                <div class="bg-[#1E293B] p-6 rounded-xl flex items-center gap-4"><span class="text-3xl font-black text-[#FFD166]">3</span><div><h3 class="font-bold text-white">Começar a Usar!</h3><p class="text-slate-400 text-sm">Envie o seu primeiro gasto</p></div></div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const chartColors = {
+            red: '#FF6B6B',
+            yellow: '#FFD166',
+            green: '#06D6A0',
+            blue: '#118AB2',
+            darkBlue: '#073B4C',
+            textPrimary: '#F8FAFC',
+            textSecondary: '#CBD5E1',
+            gridColor: 'rgba(71, 85, 105, 0.3)'
+        };
+
+        const tooltipConfig = {
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            const item = tooltipItems[0];
+                            let label = item.chart.data.labels[item.dataIndex];
+                            if (Array.isArray(label)) {
+                                return label.join(' ');
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        };
+
+        function wrapLabel(label) {
+            const maxLength = 16;
+            if (label.length <= maxLength) return label;
+            
+            const words = label.split(' ');
+            const lines = [];
+            let currentLine = '';
+
+            words.forEach(word => {
+                if ((currentLine + ' ' + word).trim().length > maxLength) {
+                    lines.push(currentLine.trim());
+                    currentLine = word;
+                } else {
+                    currentLine = (currentLine + ' ' + word).trim();
+                }
+            });
+            if (currentLine) lines.push(currentLine.trim());
+            return lines;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            new Chart(document.getElementById('expensesChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Alimentação', 'Transporte', 'Moradia', 'Lazer e Entretenimento', 'Despesas Pessoais', 'Saúde'].map(wrapLabel),
+                    datasets: [{
+                        label: 'Despesas',
+                        data: [1250.75, 550.20, 1800.00, 850.50, 400.00, 300.80],
+                        backgroundColor: [chartColors.blue, chartColors.green, chartColors.yellow, chartColors.red, '#A855F7', '#EC4899'],
+                        borderColor: chartColors.darkBlue,
+                        borderWidth: 2,
+                        borderRadius: 8
+                    }]
+                },
+                options: { ...tooltipConfig, responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { ...tooltipConfig.plugins, legend: { display: false } }, scales: { x: { ticks: { color: chartColors.textSecondary, font: { family: 'Inter' } }, grid: { color: chartColors.gridColor } }, y: { ticks: { color: chartColors.textPrimary, font: { family: 'Inter' } }, grid: { display: false } } } }
+            });
+
+            new Chart(document.getElementById('needsWantsChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Necessidades', 'Desejos', 'Poupança'],
+                    datasets: [{
+                        data: [2800, 1250, 950],
+                        backgroundColor: [chartColors.blue, chartColors.red, chartColors.green],
+                        borderColor: '#1E293B',
+                        borderWidth: 4,
+                        hoverOffset: 10
+                    }]
+                },
+                options: { ...tooltipConfig, responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { ...tooltipConfig.plugins, legend: { position: 'bottom', labels: { color: chartColors.textPrimary, font: { family: 'Inter', size: 14 }, padding: 20 } } } }
+            });
+
+            new Chart(document.getElementById('profileChart'), {
+                type: 'radar',
+                data: {
+                    labels: ['Planejador', 'Construtor', 'Sonhador', 'Despreocupado', 'Camaleão'],
+                    datasets: [{
+                        label: 'Seu Perfil',
+                        data: [8, 9, 6, 3, 5],
+                        fill: true,
+                        backgroundColor: 'rgba(6, 214, 160, 0.2)',
+                        borderColor: chartColors.green,
+                        pointBackgroundColor: chartColors.green,
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: chartColors.green
+                    }]
+                },
+                options: { ...tooltipConfig, responsive: true, maintainAspectRatio: false, scales: { r: { angleLines: { color: chartColors.gridColor }, grid: { color: chartColors.gridColor }, pointLabels: { font: { size: 14, family: 'Inter' }, color: chartColors.textPrimary }, ticks: { display: false, backdropColor: 'transparent' } } }, plugins: { ...tooltipConfig.plugins, legend: { display: false } } }
+            });
+        });
+    </script>
+</body>
+</html>
