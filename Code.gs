@@ -54,7 +54,7 @@ function onInstall(e) {
 /**
  * **FUNÇÃO ATUALIZADA**
  * Função principal que é acionada pelo webhook do Telegram.
- * O bloco try...catch agora usa a nova função centralizada handleError.
+ * O bloco try...catch agora usa a nova função centralizada handleError e o `finally` para descarregar os logs.
  * @param {Object} e O objeto de evento do webhook.
  */
 function doPost(e) {
@@ -140,6 +140,15 @@ function doPost(e) {
         comandoBase = "/cancel";
         complemento = textoRecebido.substring('cancel_'.length);
       }
+      // --- NOVO: Lógica para tratar respostas do Quiz ---
+      else if (textoRecebido.startsWith('quiz_')) {
+        const parts = textoRecebido.split('_');
+        const questionIndex = parseInt(parts[1], 10);
+        const optionIndex = parseInt(parts[2], 10);
+        handleQuizAnswer(chatId, questionIndex, optionIndex);
+        return; // Finaliza a execução aqui
+      }
+      // --- FIM DA NOVA LÓGICA ---
       else if (textoRecebido.startsWith('complete_')) {
         comandoBase = "/complete_assistant_action";
         complemento = textoRecebido.substring('complete_'.length);
@@ -203,7 +212,8 @@ function doPost(e) {
           "adicionar_conta", "listar_contas", "adicionar_categoria", "listar_categorias", 
           "listar_subcategorias", "tarefa", "lembrete", "tarefas", "agenda", "concluir", 
           "excluir_tarefa", "saude",
-          "orcamento", "metas", "novameta", "aportarmeta", "patrimonio" // <-- ADICIONADO
+          "orcamento", "metas", "novameta", "aportarmeta", "patrimonio", "meuperfil",
+          "comprar_ativo", "vender_ativo"  // <-- ADICIONADOS AQUI
       ];
 
       if (comandosConhecidosSemBarra.includes(comandoNormalizado)) {
@@ -258,11 +268,20 @@ function doPost(e) {
       }
     }
 
+
     // --- Processamento dos comandos ---
     switch (comandoBase) {
       case "/start":
           enviarMensagemTelegram(chatId, `Olá ${escapeMarkdown(usuario)}! Bem-vindo ao Boas Contas, seu assistente financeiro. Eu posso te ajudar a registrar gastos e receitas, ver seu saldo, extrato e mais.\n\nPara começar, tente algo como:\n- "gastei 50 no mercado com Cartao Nubank XYZ"\n- "paguei 50 de uber no debito do Santander"\n- "recebi 100 de salário no Itaú via PIX"\n- "transferi 20 do Nubank para o Itaú"\n\nOu use comandos como:\n- /resumo (para ver seu resumo do mês)\n- /saldo (para ver o saldo das suas contas)\n- /ajuda (para ver todos os comandos e exemplos)\n\nSe precisar de ajuda, digite /ajuda`);
           return;
+
+      // --- NOVO CASE PARA O QUIZ ---
+      case "/meuperfil":
+          logToSheet(`Comando /meuperfil detectado.`, "INFO");
+          handleMeuPerfilCommand(chatId, usuario);
+          return;
+      // --- FIM DO NOVO CASE ---
+      
       case "/confirm":
         logToSheet(`Comando /confirm detectado para transacao ID: ${complemento}`, "INFO");
         const cacheConfirm = CacheService.getScriptCache();
@@ -391,6 +410,30 @@ function doPost(e) {
           }
           return;
       // --- FIM TAREFAS ---
+      
+      // ### INÍCIO DOS NOVOS CASES DE INVESTIMENTO ###
+      case "/comprar_ativo":
+          logToSheet(`Comando /comprar_ativo detectado. Complemento: "${complemento}"`, "INFO");
+          const compraMatch = complemento.match(/([a-zA-Z0-9]+)\s+([\d.,]+)\s+([\d.,]+)\s+(?:de|do|da)\s+(.+)/i);
+          if (compraMatch) {
+            const [, ticker, quantidade, preco, corretora] = compraMatch;
+            handleComprarAtivo(chatId, ticker, parseFloat(quantidade.replace(',', '.')), parseBrazilianFloat(preco), corretora, usuario);
+          } else {
+            enviarMensagemTelegram(chatId, "❌ Formato inválido. Use: `/comprar_ativo TICKER QTD PREÇO de CONTA`\nEx: `/comprar_ativo ITSA4 100 8.50 do NuInvest`");
+          }
+          return;
+
+      case "/vender_ativo":
+          logToSheet(`Comando /vender_ativo detectado. Complemento: "${complemento}"`, "INFO");
+          const vendaMatch = complemento.match(/([a-zA-Z0-9]+)\s+([\d.,]+)\s+([\d.,]+)\s+(?:para|pra)\s+(.+)/i);
+           if (vendaMatch) {
+            const [, ticker, quantidade, preco, contaDestino] = vendaMatch;
+            handleVenderAtivo(chatId, ticker, parseFloat(quantidade.replace(',', '.')), parseBrazilianFloat(preco), contaDestino, usuario);
+          } else {
+            enviarMensagemTelegram(chatId, "❌ Formato inválido. Use: `/vender_ativo TICKER QTD PREÇO para CONTA`\nEx: `/vender_ativo ITSA4 50 10.00 para NuInvest`");
+          }
+          return;
+      // ### FIM DOS NOVOS CASES DE INVESTIMENTO ###
 
       case "/adicionar_conta":
           logToSheet(`Comando /adicionar_conta detectado. Complemento: "${complemento}"`, "INFO");
@@ -594,9 +637,7 @@ function doPost(e) {
         const resultadoLancamento = interpretarMensagemTelegram(textoRecebido, usuario, chatId);
 
         if (resultadoLancamento && resultadoLancamento.handled) {
-          logToSheet("Mensagem ja tratada e resposta enviada por funcao interna. Nenhuma acao adicional necessaria.", "INFO");
-        } else if (resultadoLancamento && resultadoLancamento.message) {
-          logToSheet(`Mensagem interpretada com sucesso: ${resultadoLancamento.message}`, "INFO");
+          logToSheet("Mensagem ja tratada pela lógica de investimentos.", "INFO");
         } else if (resultadoLancamento && resultadoLancamento.errorMessage) {
           enviarMensagemTelegram(chatId, `❌ ${resultadoLancamento.errorMessage}`);
           logToSheet(`Erro na interpretação da mensagem: ${resultadoLancamento.errorMessage}`, "WARN");
@@ -615,6 +656,12 @@ function doPost(e) {
     if (chatIdForError) {
         enviarMensagemTelegram(chatIdForError, "❌ Ocorreu um erro crítico no sistema. O administrador foi notificado. Por favor, tente novamente mais tarde.");
     }
+  } finally {
+    // --- MELHORIA DE PERFORMANCE DE LOGS ---
+    // Esta linha garante que todos os logs acumulados durante a execução
+    // sejam escritos na planilha de uma só vez, no final.
+    flushLogs();
+    // --- FIM DA MELHORIA ---
   }
 }
 
@@ -916,3 +963,5 @@ function exibirDashboardModerno() {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   SpreadsheetApp.getUi().showSidebar(html);
 }
+
+
