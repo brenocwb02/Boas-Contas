@@ -3,6 +3,12 @@
  * @description Funções para interação específica com o Google Planilhas (leitura, escrita, busca).
  */
 
+// --- INÍCIO DA MELHORIA DE PERFORMANCE DE LOGS ---
+// Buffer global para agrupar os logs antes de os escrever na planilha.
+let logBuffer = [];
+// --- FIM DA MELHORIA ---
+
+
 /**
  * Obtém o nível de log configurado na aba "Configuracoes" da planilha.
  * Este valor define o quão detalhados serão os logs escritos na aba "Logs_Sistema".
@@ -38,24 +44,14 @@ function getLogLevelConfig() {
 }
 
 /**
- * Função de log centralizada que escreve na aba 'Logs_Sistema' e no Cloud Logs (console.log).
- * Esta versão foi ajustada para garantir que os logs apareçam em todos os locais possíveis.
+ * ATUALIZADO: Função de log centralizada que agora agrupa os logs em memória.
+ * Em vez de escrever na planilha a cada chamada, adiciona a mensagem a um buffer.
+ * O console.log é mantido para depuração em tempo real.
  * @param {string} message A mensagem a ser logada.
  * @param {string} level O nível do log (DEBUG, INFO, WARN, ERROR).
  */
 function logToSheet(message, level) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const logSheet = ss.getSheetByName(SHEET_LOGS_SISTEMA);
-
-  if (!logSheet) {
-    // Se a aba de logs não for encontrada, ainda tentamos logar no console e no Logger.
-    console.error(`ERRO: Aba de logs '${SHEET_LOGS_SISTEMA}' não encontrada. Mensagem: ${message}`);
-    Logger.log(`ERRO: Aba de logs '${SHEET_LOGS_SISTEMA}' não encontrada. Mensagem: ${message}`);
-    return;
-  }
-
-  // Garante que currentLogLevel foi inicializado (pode ser problema se a primeira chamada for antes de doPost)
-  // Se currentLogLevel ainda não foi definido, tenta obtê-lo.
+  // Garante que currentLogLevel foi inicializado.
   if (typeof currentLogLevel === 'undefined' || currentLogLevel === null) {
     currentLogLevel = getLogLevelConfig();
   }
@@ -63,27 +59,53 @@ function logToSheet(message, level) {
   const numericCurrentLevel = LOG_LEVEL_MAP[currentLogLevel] || LOG_LEVEL_MAP["INFO"];
   const numericMessageLevel = LOG_LEVEL_MAP[level] || LOG_LEVEL_MAP["INFO"];
 
+  // Loga no Cloud Logs (console) para depuração imediata
   if (numericMessageLevel >= numericCurrentLevel) {
-    const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
-    try {
-      // Escreve na planilha 'Logs_Sistema'
-      logSheet.appendRow([timestamp, level, message]);
+    if (level === "ERROR") console.error(`[${level}] ${message}`);
+    else if (level === "WARN") console.warn(`[${level}] ${message}`);
+    else if (level === "INFO") console.info(`[${level}] ${message}`);
+    else if (level === "DEBUG") console.log(`[${level}] ${message}`);
+    Logger.log(`[${level}] ${message}`);
+  }
 
-      // Também loga no Cloud Logs (console.log) para depuração mais fácil
-      if (level === "ERROR") console.error(`[${level}] ${message}`);
-      else if (level === "WARN") console.warn(`[${level}] ${message}`);
-      else if (level === "INFO") console.info(`[${level}] ${message}`);
-      else if (level === "DEBUG") console.log(`[${level}] ${message}`);
-      
-      // Adiciona um log simples para a aba "Execuções" do Apps Script
-      // Isso garante que algo apareça lá, mesmo que o Cloud Logging falhe.
-      Logger.log(`[${level}] ${message}`);
+  // Adiciona ao buffer para escrita em lote no final da execução
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+  logBuffer.push([timestamp, level, message]);
+}
 
-    } catch (e) {
-      // Se houver erro ao escrever na planilha, ainda tentamos logar no console e no Logger.
-      console.error(`ERRO ao escrever log na planilha: ${e.message}. Mensagem original: ${message}`);
-      Logger.log(`ERRO ao escrever log na planilha: ${e.message}. Mensagem original: ${message}`);
+
+/**
+ * NOVO: Escreve todos os logs agrupados do buffer para a planilha de uma só vez.
+ * Esta função deve ser chamada no final da execução do script (ex: no `doPost`).
+ */
+function flushLogs() {
+  if (logBuffer.length === 0) return;
+
+  // Filtra os logs que devem ser escritos com base no nível de configuração
+  const numericCurrentLevel = LOG_LEVEL_MAP[currentLogLevel] || LOG_LEVEL_MAP["INFO"];
+  const logsToWrite = logBuffer.filter(row => {
+    const numericMessageLevel = LOG_LEVEL_MAP[row[1]] || LOG_LEVEL_MAP["INFO"];
+    return numericMessageLevel >= numericCurrentLevel;
+  });
+
+  if (logsToWrite.length === 0) {
+    logBuffer = []; // Limpa o buffer mesmo que nada seja escrito
+    return;
+  }
+  
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const logSheet = ss.getSheetByName(SHEET_LOGS_SISTEMA);
+    if (logSheet) {
+      logSheet.getRange(logSheet.getLastRow() + 1, 1, logsToWrite.length, logsToWrite[0].length)
+              .setValues(logsToWrite);
     }
+  } catch (e) {
+    console.error(`ERRO CRÍTICO ao descarregar logs: ${e.message}`);
+    Logger.log(`ERRO CRÍTICO ao descarregar logs: ${e.message}`);
+  } finally {
+    // Limpa o buffer para a próxima execução
+    logBuffer = [];
   }
 }
 
@@ -510,3 +532,4 @@ function calcularGastosCartaoCredito(transacoesRaw, mes, ano, dadosContas) {
 
   return resultado;
 }
+
