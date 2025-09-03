@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Descrições dos Perfis Financeiros</title>
+    <!-- Importa as fontes e ícones necessários -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Inclui a nossa folha de estilos central -->
+    <?!= include('Stylesheet_Dark'); ?>
+    <style>
+        /* Estilo para garantir que o fundo do corpo corresponda ao tema escuro */
+        body {
+            background-color: var(--bg-primary); /* Usa a cor de fundo principal do tema */
+            padding: 16px;
+        }
+        .profile-card-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        @media (min-width: 768px) {
+            .profile-card-grid {
+                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px; text-align: center; color: var(--text-primary);">Os 5 Perfis Financeiros</h1>
+        <p style="color: var(--text-muted); text-align: center; margin-bottom: 32px;">
+            Baseado na pesquisa "Relação do brasileiro com o dinheiro" da ANBIMA.
+        </p>
+
+        <div class="profile-card-grid">
+
+            <!-- Card Construtor -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-orange), var(--accent-red));"><i class="fas fa-chart-line"></i></div>
+                    <h2 class="card-title">🏗️ Construtor</h2>
+                </div>
+                <div class="card-content">
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Descrição:</strong> Você tem foco em construir património e não tem medo de correr riscos calculados para ver o seu dinheiro render. A sua principal motivação é o crescimento e a multiplicação dos seus recursos.</p>
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Ponto Forte:</strong> Excelente capacidade de acumular riqueza e de identificar oportunidades de investimento.</p>
+                    <p style="color: var(--text-secondary);"><strong>Desafio:</strong> Por vezes, o foco no "macro" (grandes investimentos) pode levar a uma menor atenção aos pequenos gastos do dia a dia, que somados podem impactar o resultado final.</p>
+                </div>
+            </div>
+
+            <!-- Card Planejador -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));"><i class="fas fa-clipboard-list"></i></div>
+                    <h2 class="card-title">꼼 Planejador</h2>
+                </div>
+                <div class="card-content">
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Descrição:</strong> Organização, segurança e controlo são os seus lemas. Você gosta de ter tudo registado, com planilhas, orçamentos e metas bem definidas para o futuro.</p>
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Ponto Forte:</strong> Grande disciplina e capacidade de seguir um plano, o que geralmente leva a uma vida financeira muito estável e segura.</p>
+                    <p style="color: var(--text-secondary);"><strong>Desafio:</strong> Ocasionalmente, o excesso de controlo pode levar à rigidez, dificultando a adaptação a oportunidades inesperadas ou a permissão de gastos flexíveis para o bem-estar.</p>
+                </div>
+            </div>
+
+            <!-- Card Camaleão -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-teal), var(--accent-green));"><i class="fas fa-sync-alt"></i></div>
+                    <h2 class="card-title">🦎 Camaleão</h2>
+                </div>
+                <div class="card-content">
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Descrição:</strong> Você adapta-se facilmente às circunstâncias financeiras. Numa fase está a controlar tudo ao pormenor, noutra está mais relaxado e flexível com os gastos.</p>
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Ponto Forte:</strong> A sua flexibilidade é uma grande vantagem para lidar com os imprevistos da vida sem grande stress.</p>
+                    <p style="color: var(--text-secondary);"><strong>Desafio:</strong> A principal dificuldade é manter a consistência e a disciplina necessárias para atingir objetivos financeiros de longo prazo, como a reforma.</p>
+                </div>
+            </div>
+
+            <!-- Card Despreocupado -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #F59E0B, #d97706);"><i class="fas fa-smile-beam"></i></div>
+                    <h2 class="card-title">😎 Despreocupado</h2>
+                </div>
+                <div class="card-content">
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Descrição:</strong> Viver e aproveitar o presente é a sua maior prioridade. Você lida com o dinheiro conforme as necessidades e os desejos surgem, sem muito planeamento ou preocupação com o futuro.</p>
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Ponto Forte:</strong> Você sabe aproveitar a vida e não sofre com a ansiedade de planear cada cêntimo.</p>
+                    <p style="color: var(--text-secondary);"><strong>Desafio:</strong> Esta abordagem pode levar à acumulação de dívidas (especialmente no cartão de crédito) e à falta de uma reserva para emergências ou para a reforma.</p>
+                </div>
+            </div>
+
+            <!-- Card Sonhador -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #8B5CF6, #ec4899);"><i class="fas fa-rocket"></i></div>
+                    <h2 class="card-title">몽 Sonhador</h2>
+                </div>
+                <div class="card-content">
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Descrição:</strong> Você é motivado por grandes objetivos e sonhos de vida, como viajar pelo mundo, ter a casa dos sonhos ou abrir o seu próprio negócio. O dinheiro é visto como um meio para realizar estas grandes aspirações.</p>
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);"><strong>Ponto Forte:</strong> A sua capacidade de sonhar grande dá-lhe uma motivação poderosa para querer melhorar a sua vida financeira.</p>
+                    <p style="color: var(--text-secondary);"><strong>Desafio:</strong> Muitas vezes, a distância entre o sonho e a realidade parece tão grande que é difícil criar um plano prático e dar os primeiros passos. O desafio é transformar esses grandes sonhos em pequenas metas mensais.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
+
