@@ -200,70 +200,19 @@
         .fc-daygrid-day-number { color: var(--text-secondary); }
         .fc-col-header-cell-cushion { color: var(--text-secondary); }
         .fc-event-title { font-weight: 600; }
-
         /* NOVO: Estilos para Personalização do Dashboard */
-        .customize-btn {
-            position: fixed;
-            bottom: 90px; /* Acima do FAB */
-            right: 20px;
-            width: 50px;
-            height: 50px;
-            background: linear-gradient(135deg, var(--accent-purple), var(--accent-orange));
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            box-shadow: var(--shadow-lg);
-            cursor: pointer;
-            transition: var(--transition);
-            z-index: 1001;
-            border: none;
-        }
-        @media (min-width: 768px) {
-            .customize-btn {
-                bottom: 100px;
-                right: 30px;
-                width: 60px;
-                height: 60px;
-                font-size: 1.8rem;
-            }
-        }
-        .customize-btn:hover {
-            transform: scale(1.05) translateY(-5px);
-            box-shadow: 0 15px 25px rgba(139, 92, 246, 0.4);
-        }
-
-        #customizeModal .modal-content {
-            max-width: 500px;
-        }
-        #card-visibility-list {
-            list-style: none;
-            padding: 0;
-            margin-top: 20px;
-        }
-        #card-visibility-list li {
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border-color);
-        }
-        #card-visibility-list li:last-child {
-            border-bottom: none;
-        }
-        #card-visibility-list label {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            font-size: 1rem;
-            color: var(--text-secondary);
-        }
-        #card-visibility-list input[type="checkbox"] {
-            margin-right: 15px;
-            width: 1.2em;
-            height: 1.2em;
-            accent-color: var(--accent-teal);
-        }
-
+        .customize-btn { position: fixed; bottom: 90px; right: 20px; width: 50px; height: 50px; background: linear-gradient(135deg, var(--accent-purple), var(--accent-orange)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; box-shadow: var(--shadow-lg); cursor: pointer; transition: var(--transition); z-index: 1001; border: none; }
+        @media (min-width: 768px) { .customize-btn { bottom: 100px; right: 30px; width: 60px; height: 60px; font-size: 1.8rem; } }
+        .customize-btn:hover { transform: scale(1.05) translateY(-5px); box-shadow: 0 15px 25px rgba(139, 92, 246, 0.4); }
+        #customizeModal .modal-content { max-width: 500px; }
+        #card-visibility-list { list-style: none; padding: 0; margin-top: 20px; }
+        #card-visibility-list li { padding: 12px 0; border-bottom: 1px solid var(--border-color); }
+        #card-visibility-list li:last-child { border-bottom: none; }
+        #card-visibility-list label { display: flex; align-items: center; cursor: pointer; font-size: 1rem; color: var(--text-secondary); }
+        #card-visibility-list input[type="checkbox"] { margin-right: 15px; width: 1.2em; height: 1.2em; accent-color: var(--accent-teal); }
+        .sortable-section { cursor: grab; }
+        .sortable-section:active { cursor: grabbing; }
+        .sortable-ghost { opacity: 0.4; background: var(--bg-secondary); border: 2px dashed var(--accent-blue); border-radius: var(--border-radius); }
         /* NOVO: Estilos para o container e itens arrastáveis */
         .sortable-section {
             cursor: grab;
@@ -277,6 +226,55 @@
             border: 2px dashed var(--accent-blue);
             border-radius: var(--border-radius);
         }
+        
+        /* NOVOS ESTILOS PARA A CONCILIAÇÃO */
+        .reconciliation-results {
+            margin-top: 32px;
+        }
+        .result-section {
+            margin-bottom: 24px;
+        }
+        .result-section h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .tx-item {
+            display: grid;
+            grid-template-columns: 50px 1fr 120px;
+            gap: 16px;
+            align-items: center;
+            padding: 12px;
+            border-radius: var(--border-radius-sm);
+            transition: background-color 0.2s;
+        }
+        .tx-item:hover {
+            background-color: var(--bg-secondary);
+        }
+        .tx-item-import {
+            grid-template-columns: 30px 50px 1fr 120px;
+        }
+        .tx-icon {
+            font-size: 1.2rem;
+            text-align: center;
+        }
+        .tx-value {
+            font-weight: 600;
+            text-align: right;
+        }    
+    
+        /* NOVO: Estilos para a Carteira de Investimentos */
+        .investment-item { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 16px 0; border-bottom: 1px solid rgba(var(--border-color-light), 0.5); }
+        .investment-item:last-child { border-bottom: none; }
+        .investment-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+        .investment-name { font-weight: 600; color: var(--text-primary); grid-column: 1 / -1; }
+        .investment-meta { font-size: 0.85rem; color: var(--text-muted); }
+        .investment-values { text-align: right; }
+        .investment-current-value { font-weight: 700; font-size: 1.1rem; color: var(--text-primary); margin-bottom: 4px; }
+        .investment-pnl { font-size: 0.9rem; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -297,6 +295,8 @@
             </div>
             <ul class="sidebar-nav">
                 <li><a id="show-dashboard-view" class="active"><i class="fas fa-tachometer-alt"></i> <span>Visão Geral</span></a></li>
+                <!-- ITEM DE MENU CORRIGIDO -->
+                <li><a id="show-reconciliation-view"><i class="fas fa-file-import"></i> <span>Conciliação Bancária</span></a></li>
                 <li><a id="show-agenda-view"><i class="fas fa-calendar-alt"></i> <span>Agenda</span></a></li>
                 <li><a id="open-commands-guide-btn"><i class="fas fa-book"></i> <span>Guia de Comandos</span></a></li>
             </ul>
@@ -408,6 +408,29 @@
                             <div class="main-grid">
                                 <div class="left-column">
                                     <div class="card" id="expenses-chart-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal));"><i class="fas fa-chart-bar"></i></div><div class="card-title">Despesas por Categoria (Clique para ver detalhes)</div></div><div class="card-content"><div class="chart-container"><canvas id="expenses-chart"></canvas></div><div id="expenses-chart-empty" class="empty-state" style="display: none;"><i class="fas fa-chart-bar"></i><div>Nenhum dado de despesas para o gráfico.</div></div></div></div>
+                                    <!-- NOVO CARD DE INVESTIMENTOS -->
+                                    <div class="card" id="investments-section">
+                                        <div class="card-header">
+                                            <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-green), #6EE7B7);">
+                                                <i class="fas fa-seedling"></i>
+                                            </div>
+                                            <div class="card-title">Carteira de Investimentos</div>
+                                        </div>
+                                        <div class="card-content">
+                                            <div id="investments-summary" style="padding: 16px; background: var(--bg-secondary); border-radius: var(--border-radius-sm); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
+                                                <span style="color: var(--text-secondary); font-weight: 500;">Valor Total da Carteira</span>
+                                                <span id="investments-total-value" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-green);">R$ 0,00</span>
+                                            </div>
+                                            <div id="investments-list">
+                                                <!-- Os itens de investimento serão renderizados aqui pelo JS -->
+                                            </div>
+                                            <div id="investments-empty" class="empty-state" style="display: none;">
+                                                <i class="fas fa-chart-line"></i>
+                                                <div>Nenhum investimento encontrado.</div>
+                                                <p style="font-size: 0.9rem; margin-top: 8px;">Adicione seus ativos na aba "Investimentos" da sua planilha.</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="card" id="budget-progress-section"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));"><i class="fas fa-chart-pie"></i></div><div class="card-title">Progresso do Orçamento</div></div><div class="card-content"><div class="chart-container" id="budget-chart-container"><canvas id="budget-chart"></canvas></div><div id="budget-chart-empty" class="empty-state" style="display: none;"><i class="fas fa-calculator"></i><div>Nenhum orçamento definido para o gráfico.</div></div></div></div>
                                     <div class="card" id="needs-wants-section">
                                         <div class="card-header">
@@ -437,6 +460,52 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- VISTA DA CONCILIAÇÃO BANCÁRIA (CORRIGIDA) -->
+                <div id="reconciliation-view" style="display: none;">
+                    <div class="header">
+                        <div class="header-left">
+                            <h1><i class="fas fa-file-import"></i> Conciliação Bancária</h1>
+                            <p>Importe seu extrato (CSV ou OFX) para encontrar transações não lançadas.</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-orange));"><i class="fas fa-upload"></i></div>
+                            <h2 class="card-title">1. Enviar Extrato</h2>
+                        </div>
+                        <div class="card-content">
+                            <p class="text-muted" style="margin-bottom: 20px;">Selecione o arquivo do seu extrato bancário. O sistema tentará identificar as colunas e transações automaticamente.</p>
+                            <div class="form-group">
+                                <label for="statement-file-input">Arquivo de Extrato (.csv, .ofx)</label>
+                                <!-- CORREÇÃO APLICADA AQUI -->
+                                <input type="file" id="statement-file-input" accept=".csv,.ofx,text/csv,application/x-ofx">
+                            </div>
+                            <button id="process-statement-btn" class="btn btn-primary">
+                                <i class="fas fa-cogs"></i> Processar Arquivo
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="reconciliation-results-container" class="card" style="display: none;">
+                         <div class="card-header">
+                            <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-teal), var(--accent-green));"><i class="fas fa-tasks"></i></div>
+                            <h2 class="card-title">2. Revisar e Importar</h2>
+                        </div>
+                        <div class="card-content">
+                            <div id="reconciliation-loading" style="display: none;" class="loading">
+                                <i class="fas fa-spinner"></i>
+                                <div>Analisando transações...</div>
+                            </div>
+                            <div id="reconciliation-results">
+                                <!-- Os resultados serão inseridos aqui pelo JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
 
                 <!-- NOVA VISTA DA AGENDA -->
                 <div id="agenda-view" style="display: none;">
@@ -576,6 +645,45 @@
         function renderSummary(summary) { document.getElementById('total-receitas').textContent = formatCurrency(summary.totalReceitas); document.getElementById('total-despesas').textContent = formatCurrency(summary.totalDespesas); const saldoElement = document.getElementById('saldo-liquido'); saldoElement.textContent = formatCurrency(summary.saldoLiquidoMes); saldoElement.classList.remove('positive', 'negative', 'neutral'); if (summary.saldoLiquidoMes > 0) saldoElement.classList.add('positive'); else if (summary.saldoLiquidoMes < 0) saldoElement.classList.add('negative'); else saldoElement.classList.add('neutral'); }
         function renderNetWorth(netWorthData) { if (!netWorthData) return; const netWorthElement = document.getElementById('patrimonio-liquido'); const assetsElement = document.getElementById('total-ativos-summary'); const liabilitiesElement = document.getElementById('total-passivos-summary'); netWorthElement.textContent = formatCurrency(netWorthData.netWorth); assetsElement.textContent = `Ativos: ${formatCurrency(netWorthData.assets)}`; liabilitiesElement.textContent = `Passivos: ${formatCurrency(netWorthData.liabilities)}`; netWorthElement.classList.remove('positive', 'negative', 'neutral'); if (netWorthData.netWorth > 0) { netWorthElement.classList.add('positive'); } else if (netWorthData.netWorth < 0) { netWorthElement.classList.add('negative'); } else { netWorthElement.classList.add('neutral'); } }
         function renderAccountBalances(accounts) { const gridContainer = document.getElementById('account-balances-grid'); const emptyState = document.getElementById('account-balances-empty'); const saldoConsolidadoEl = document.getElementById('saldo-consolidado'); allDashboardAccounts = accounts || []; if (!accounts || accounts.length === 0) { gridContainer.innerHTML = ''; emptyState.style.display = 'flex'; saldoConsolidadoEl.textContent = formatCurrency(0); return; } emptyState.style.display = 'none'; const totalBalance = accounts.reduce((sum, acc) => sum + acc.saldo, 0); saldoConsolidadoEl.textContent = formatCurrency(totalBalance); gridContainer.innerHTML = accounts.map(account => ` <div class="summary-card" style="padding: 16px; border-radius: var(--border-radius-sm);"> <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;"> <div> <div class="account-name" style="font-size: 1.1rem;">${account.nomeOriginal}</div> <div class="account-type" style="font-size: 0.8rem;">${account.banco || account.tipo}</div> </div> <div class="account-actions" style="display: flex; gap: 8px;"> <button class="edit-account-btn" data-name="${account.nomeOriginal}" title="Editar Conta" style="background:none; border:none; color: var(--text-muted); cursor:pointer; font-size: 0.9rem;"><i class="fas fa-edit"></i></button> <button class="delete-account-btn" data-name="${account.nomeOriginal}" title="Excluir Conta" style="background:none; border:none; color: var(--text-muted); cursor:pointer; font-size: 0.9rem;"><i class="fas fa-trash-alt"></i></button> </div> </div> <div class="account-balance ${account.saldo >= 0 ? 'positive' : 'negative'}" style="font-size: 1.75rem; font-weight: 700;"> ${formatCurrency(account.saldo)} </div> </div> `).join(''); document.querySelectorAll('.edit-account-btn').forEach(btn => { btn.addEventListener('click', handleEditAccount); }); document.querySelectorAll('.delete-account-btn').forEach(btn => { btn.addEventListener('click', handleDeleteAccount); }); }
+        
+        // ### NOVA FUNÇÃO PARA RENDERIZAR INVESTIMENTOS ###
+        function renderInvestments(investments) {
+            const container = document.getElementById('investments-list');
+            const emptyState = document.getElementById('investments-empty');
+            const totalValueEl = document.getElementById('investments-total-value');
+
+            if (!investments || investments.length === 0) {
+                container.innerHTML = '';
+                emptyState.style.display = 'flex';
+                totalValueEl.textContent = formatCurrency(0);
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            const totalValue = investments.reduce((sum, asset) => sum + asset.valorAtual, 0);
+            totalValueEl.textContent = formatCurrency(totalValue);
+
+            container.innerHTML = investments.sort((a,b) => b.valorAtual - a.valorAtual).map(asset => {
+                const pnl = asset.lucroPrejuizo;
+                const pnlClass = pnl > 0 ? 'positive' : (pnl < 0 ? 'negative' : 'neutral');
+                const pnlSign = pnl > 0 ? '+' : '';
+                
+                return `
+                    <div class="investment-item">
+                        <div class="investment-info-grid">
+                            <div class="investment-name">${asset.ativo} (${asset.tipo})</div>
+                            <div class="investment-meta">Qtd: ${asset.quantidade}</div>
+                            <div class="investment-meta">Preço Médio: ${formatCurrency(asset.precoMedio)}</div>
+                        </div>
+                        <div class="investment-values">
+                            <div class="investment-current-value">${formatCurrency(asset.valorAtual)}</div>
+                            <div class="investment-pnl ${pnlClass}">${pnlSign}${formatCurrency(pnl)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         function renderCreditCards(cards) { const container = document.getElementById('credit-cards'); if (!cards || cards.length === 0) { container.innerHTML = `<div class="empty-state"><i class="fas fa-credit-card"></i><div>Nenhum cartão encontrado</div></div>`; return; } container.innerHTML = cards.map(card => { const valorExibido = card.faturaAtual; const utilizacao = card.limite > 0 ? (valorExibido / card.limite) * 100 : 0; const isHighUsage = utilizacao > 80; return `<div class="credit-card"><div class="card-header-info"><div class="card-name">${card.nomeOriginal}</div><div class="card-limit">Limite: ${formatCurrency(card.limite)}</div></div><div class="usage-bar"><div class="usage-fill ${isHighUsage ? 'high' : ''}" style="width: ${Math.min(utilizacao, 100)}%"></div></div><div class="usage-info"><span class="usage-percentage">${utilizacao.toFixed(1)}% utilizado</span><span class="usage-amount ${valorExibido > card.limite ? 'negative' : ''}">${formatCurrency(valorExibido)}</span></div></div>`; }).join(''); }
         function renderRecentTransactions(transactions, newTransactionId = null) { const container = document.getElementById('recent-transactions'); if (!transactions || transactions.length === 0) { container.innerHTML = `<div class="empty-state"><i class="fas fa-history"></i><div>Nenhuma transação encontrada</div></div>`; return; } container.innerHTML = transactions.map(transaction => { const highlightClass = transaction.id === newTransactionId ? 'highlight' : ''; return ` <div class="transaction-item ${highlightClass}" data-id="${transaction.id}"> <div class="transaction-icon ${transaction.tipo.toLowerCase()}"> <i class="fas fa-${transaction.tipo === 'Receita' ? 'arrow-up' : 'arrow-down'}"></i> </div> <div class="transaction-details"> <div class="transaction-desc">${transaction.descricao}</div> <div class="transaction-meta">${transaction.data} • ${transaction.categoria} • ${transaction.conta}</div> </div> <div class="transaction-amount ${transaction.tipo === 'Receita' ? 'positive' : 'negative'}"> ${transaction.tipo === 'Receita' ? '+' : '-'}${formatCurrency(Math.abs(transaction.valor))} </div> <div class="transaction-actions"> <button class="edit-transaction-btn" data-id="${transaction.id}" title="Editar Lançamento"><i class="fas fa-edit"></i></button> <button class="delete-transaction-btn" data-id="${transaction.id}" title="Excluir Lançamento"><i class="fas fa-trash-alt"></i></button> </div> </div> `; }).join(''); document.querySelectorAll('.edit-transaction-btn').forEach(button => button.addEventListener('click', (event) => { const transactionId = event.currentTarget.dataset.id; const transactionToEdit = allTransactions.find(t => t.id === transactionId); if (transactionToEdit) openEditTransactionModal(transactionToEdit); else showFeedback('Erro: Não foi possível encontrar os dados desta transação para editar.', 'error'); })); document.querySelectorAll('.delete-transaction-btn').forEach(button => button.addEventListener('click', (event) => confirmDeleteTransaction(event.currentTarget.dataset.id, 'Lançamento'))); }
         function renderBillsToPay(bills) { const container = document.getElementById('bills-to-pay'); if (!bills || bills.length === 0) { container.innerHTML = `<div class="empty-state"><i class="fas fa-calendar-check"></i><div>Nenhuma conta pendente</div></div>`; return; } container.innerHTML = bills.map(bill => `<div class="bill-item"><div class="bill-info"><div class="bill-desc">${bill.descricao}</div><div class="bill-due">Vencimento: ${bill.dataVencimento}</div></div><div style="text-align: right;"><div class="bill-amount">${formatCurrency(bill.valor)}</div><span class="status-badge status-${bill.status.toLowerCase()}">${bill.status}</span></div></div>`).join(''); }
@@ -584,7 +692,31 @@
         function renderBudgetProgress(budget) { const chartCanvas = document.getElementById('budget-chart'); const emptyState = document.getElementById('budget-chart-empty'); const chartContainer = document.getElementById('budget-chart-container'); if (!budget || budget.length === 0 || budget.every(item => item.orcado === 0 && item.gasto === 0)) { chartCanvas.style.display = 'none'; emptyState.style.display = 'block'; chartContainer.style.height = 'auto'; return; } chartCanvas.style.display = 'block'; emptyState.style.display = 'none'; const categoryHeight = 50; const minChartHeight = 300; const dynamicHeight = Math.max(minChartHeight, budget.length * categoryHeight); chartContainer.style.height = `${dynamicHeight}px`; const sortedBudget = [...budget].sort((a, b) => b.orcado - a.orcado); const chartData = { labels: sortedBudget.map(item => item.icon ? `${item.icon} ${item.categoria}` : item.categoria), datasets: [ { label: 'Orçado', data: sortedBudget.map(item => item.orcado), backgroundColor: 'rgba(59, 130, 246, 0.7)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1, barPercentage: 0.8, categoryPercentage: 0.6 }, { label: 'Gasto', data: sortedBudget.map(item => item.gasto), backgroundColor: 'rgba(20, 184, 166, 0.7)', borderColor: 'rgba(20, 184, 166, 1)', borderWidth: 1, barPercentage: 0.8, categoryPercentage: 0.6 } ] }; const chartOptions = { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top', labels: { color: '#F8FAFC' } }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${formatCurrency(context.parsed.x)}` } }, datalabels: { display: false } }, scales: { x: { stacked: false, ticks: { color: '#CBD5E1', callback: value => formatCurrency(value) }, grid: { color: 'rgba(71, 85, 105, 0.3)' } }, y: { stacked: false, ticks: { color: '#F8FAFC' } } } }; if (budgetChartInstance) budgetChartInstance.destroy(); budgetChartInstance = new Chart(chartCanvas, { type: 'bar', data: chartData, options: chartOptions }); }
         function renderNeedsWantsChart(summary, totalReceitas) { const chartCanvas = document.getElementById('needs-wants-chart'); const emptyState = document.getElementById('needs-wants-empty'); if (!summary || (summary.necessidades === 0 && summary.desejos === 0 && summary.naoClassificado === 0)) { chartCanvas.style.display = 'none'; emptyState.style.display = 'flex'; return; } chartCanvas.style.display = 'block'; emptyState.style.display = 'none'; const poupanca = Math.max(0, totalReceitas - (summary.necessidades + summary.desejos + summary.naoClassificado)); const chartData = { labels: ['Necessidades', 'Desejos', 'Poupança', 'Não Classificado'], datasets: [{ data: [summary.necessidades, summary.desejos, poupanca, summary.naoClassificado], backgroundColor: ['#3B82F6', '#8B5CF6', '#10B981', '#94A3B8'], borderColor: 'var(--bg-card)', borderWidth: 4, hoverOffset: 8 }] }; if (needsWantsChartInstance) needsWantsChartInstance.destroy(); needsWantsChartInstance = new Chart(chartCanvas, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: '#F8FAFC', font: { family: 'Inter', size: 12 }, padding: 20 } }, tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) label += ': '; const value = context.parsed; label += formatCurrency(value); if (totalReceitas > 0) { const percentage = ((value / totalReceitas) * 100).toFixed(1); label += ` (${percentage}%)`; } return label; } } }, datalabels: { display: false } } } }); }
         function loadDashboardData() { showLoading(); const selectedMonth = parseInt(document.getElementById('month-select').value); const selectedYear = parseInt(document.getElementById('year-input').value); if (typeof google !== 'undefined' && google.script && google.script.run) { google.script.run .withSuccessHandler(function(data) { onSuccess(data, selectedMonth, selectedYear); }) .withFailureHandler(onFailure) .getDashboardData(selectedMonth + 1, selectedYear); } }
-        function onSuccess(data, selectedMonth, selectedYear, newTransactionId = null) { hideLoading(); allAccounts = data.accounts || []; allCategories = data.categories || {}; allPaymentMethods = data.paymentMethods || []; allTransactions = data.recentTransactions || []; renderSummary(data.summary); renderNetWorth(data.netWorth); renderAccountBalances(data.accountBalances); renderCreditCards(data.creditCardSummaries); renderBillsToPay(data.billsToPay); renderRecentTransactions(allTransactions, newTransactionId); renderGoalsProgress(data.goalsProgress); renderBudgetProgress(data.budgetProgress); renderExpenseChart(data.expensesByCategory); renderNeedsWantsChart(data.needsWantsSummary, data.summary.totalReceitas); updateLastUpdateTime(selectedMonth, selectedYear); populateAccountsDropdown(); }
+        
+        // ### FUNÇÃO onSUCCESS ATUALIZADA ###
+        function onSuccess(data, selectedMonth, selectedYear, newTransactionId = null) {
+            hideLoading();
+            allAccounts = data.accounts || [];
+            allCategories = data.categories || {};
+            allPaymentMethods = data.paymentMethods || [];
+            allTransactions = data.recentTransactions || [];
+            
+            renderSummary(data.summary);
+            renderNetWorth(data.netWorth);
+            renderAccountBalances(data.accountBalances);
+            renderCreditCards(data.creditCardSummaries);
+            renderBillsToPay(data.billsToPay);
+            renderRecentTransactions(allTransactions, newTransactionId);
+            renderGoalsProgress(data.goalsProgress);
+            renderBudgetProgress(data.budgetProgress);
+            renderExpenseChart(data.expensesByCategory);
+            renderNeedsWantsChart(data.needsWantsSummary, data.summary.totalReceitas);
+            renderInvestments(data.investments); // <-- NOVA CHAMADA
+            
+            updateLastUpdateTime(selectedMonth, selectedYear);
+            populateAccountsDropdown();
+        }
+
         function onFailure(error) { hideLoading(); showError('Não foi possível carregar os dados do dashboard. Tente novamente. Se o problema persistir, contate o administrador.'); console.error('Erro ao carregar dados:', error); }
         function scrollToSection(event) { event.preventDefault(); const targetId = event.currentTarget.getAttribute('href'); const targetElement = document.querySelector(targetId); if (targetElement) { toggleMenu(false); window.scrollTo({ top: targetElement.offsetTop - 20, behavior: 'smooth' }); } }
         function updateActiveNavLink() { const sections = document.querySelectorAll('.main-content-area .card, .main-content-area .header'); const navLinks = document.querySelectorAll('.sidebar-nav a'); let currentActive = null; const scrollPosition = window.scrollY + window.innerHeight / 3; sections.forEach(section => { if (section.id) { const sectionTop = section.offsetTop; const sectionHeight = section.clientHeight; if (scrollPosition >= sectionTop && scrollPosition < sectionTop + sectionHeight) { currentActive = section.id; } } }); navLinks.forEach(link => { link.classList.remove('active'); if (currentActive && link.getAttribute('href').includes(currentActive)) { link.classList.add('active'); } }); }
@@ -638,6 +770,133 @@
         closeCustomizeModalBtn.onclick = () => customizeModal.classList.remove('show');
         saveLayoutBtn.onclick = () => { const checkboxes = visibilityList.querySelectorAll('input'); checkboxes.forEach(input => { const sectionElement = document.getElementById(input.value); if (sectionElement) { sectionElement.style.display = input.checked ? 'block' : 'none'; } }); saveLayoutPreferences(); customizeModal.classList.remove('show'); };
 
+        // CORREÇÃO: Declarar a variável aqui para que ela seja acessível em todo o script
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+        // ##################################################################
+        // ##      INÍCIO DO NOVO CÓDIGO DE CONCILIAÇÃO                    ##
+        // ##################################################################
+        const showReconciliationBtn = document.getElementById('show-reconciliation-view');
+        const reconciliationView = document.getElementById('reconciliation-view');
+        const processStatementBtn = document.getElementById('process-statement-btn');
+        const statementFileInput = document.getElementById('statement-file-input');
+        const resultsContainer = document.getElementById('reconciliation-results-container');
+        const resultsContent = document.getElementById('reconciliation-results');
+        const reconciliationLoading = document.getElementById('reconciliation-loading');
+
+        function onReconciliationFailure(error) {
+            reconciliationLoading.style.display = 'none';
+            resultsContent.innerHTML = `<div class="error-message"><strong>Falha na Conciliação:</strong> ${error.message}</div>`;
+            console.error('Erro na conciliação:', error);
+        }
+
+        processStatementBtn.addEventListener('click', () => {
+            const file = statementFileInput.files[0];
+            if (!file) {
+                showFeedback('Por favor, selecione um arquivo.', 'error');
+                return;
+            }
+
+            resultsContainer.style.display = 'block';
+            reconciliationLoading.style.display = 'flex';
+            resultsContent.innerHTML = '';
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const fileContent = event.target.result;
+                google.script.run
+                    .withSuccessHandler(displayReconciliationResults)
+                    .withFailureHandler(onReconciliationFailure)
+                    .processBankStatement(fileContent, file.name);
+            };
+            reader.onerror = function() {
+                showFeedback('Erro ao ler o arquivo.', 'error');
+                reconciliationLoading.style.display = 'none';
+            };
+            reader.readAsText(file);
+        });
+
+        function displayReconciliationResults(result) {
+            try { 
+                reconciliationLoading.style.display = 'none';
+                console.log("Dados recebidos da conciliação:", result);
+
+                if (!result) { 
+                    resultsContent.innerHTML = `<div class="error-message">O servidor não retornou uma resposta válida. Verifique os logs do Apps Script.</div>`;
+                    return;
+                }
+                if (result.error) {
+                    resultsContent.innerHTML = `<div class="error-message">${result.error}</div>`;
+                    return;
+                }
+
+                let html = '';
+
+                if (result.notFound && result.notFound.length > 0) {
+                    html += `<div class="result-section"><h4><i class="fas fa-plus-circle text-green-400"></i> Transações para Importar (${result.notFound.length})</h4><div id="import-list">`;
+                    result.notFound.forEach((tx, index) => {
+                        const txDate = new Date(tx.date);
+                        const formattedDate = txDate.toLocaleDateString('pt-BR');
+                        const isExpense = tx.type === 'Despesa';
+                        html += `<div class="tx-item tx-item-import"><input type="checkbox" class="import-checkbox" checked data-index="${index}"><div class="tx-icon ${isExpense ? 'text-red-400' : 'text-green-400'}"><i class="fas fa-file-invoice-dollar"></i></div><div><div>${tx.description}</div><div class="text-sm text-muted">${formattedDate}</div></div><div class="tx-value ${isExpense ? 'negative' : 'positive'}">${formatCurrency(tx.value)}</div></div>`;
+                    });
+                    html += `</div><div class="form-actions" style="justify-content: flex-start; margin-top: 20px;"><button id="import-selected-btn" class="btn btn-primary">Importar Selecionadas</button></div></div>`;
+                } else {
+                     html += `<div class="result-section"><h4><i class="fas fa-check-circle text-green-400"></i> Nenhuma nova transação para importar!</h4><p class="text-muted" style="margin-top: 8px;">Parece que todas as transações do seu extrato já foram lançadas no sistema.</p></div>`;
+                }
+
+                if (result.reconciled && result.reconciled.length > 0) {
+                     html += `<div class="result-section"><h4><i class="fas fa-check-double text-blue-400"></i> Transações Já Conciliadas (${result.reconciled.length})</h4>`;
+                     result.reconciled.forEach(match => {
+                        const txDate = new Date(match.imported.date);
+                        const formattedDate = txDate.toLocaleDateString('pt-BR');
+                        const isExpense = match.imported.type === 'Despesa';
+                         html += `<div class="tx-item"><div class="tx-icon ${isExpense ? 'text-red-400' : 'text-green-400'}"><i class="fas fa-link"></i></div><div><div>${match.imported.description}</div><div class="text-sm text-muted">Extrato: ${formattedDate}</div></div><div class="tx-value ${isExpense ? 'negative' : 'positive'}">${formatCurrency(match.imported.value)}</div></div>`;
+                     });
+                     html += `</div>`;
+                }
+
+                resultsContent.innerHTML = html;
+
+                if (result.notFound && result.notFound.length > 0) {
+                    document.getElementById('import-selected-btn').addEventListener('click', () => {
+                        const checkboxes = document.querySelectorAll('.import-checkbox:checked');
+                        const transactionsToImport = [];
+                        checkboxes.forEach(cb => {
+                            transactionsToImport.push(result.notFound[parseInt(cb.dataset.index)]);
+                        });
+
+                        if (transactionsToImport.length === 0) {
+                            showFeedback('Nenhuma transação selecionada para importar.', 'error');
+                            return;
+                        }
+                        
+                        reconciliationLoading.style.display = 'flex';
+                        resultsContent.innerHTML = '';
+
+                        google.script.run
+                            .withSuccessHandler(response => {
+                                reconciliationLoading.style.display = 'none';
+                                resultsContainer.style.display = 'none';
+                                statementFileInput.value = '';
+                                showFeedback(response.message, 'success');
+                                onSuccess(response.dashboardData, new Date().getMonth(), new Date().getFullYear());
+                                switchView('dashboard');
+                            })
+                            .withFailureHandler(onReconciliationFailure)
+                            .importNewTransactions(transactionsToImport);
+                    });
+                }
+            } catch (e) {
+                console.error("Erro ao renderizar resultados da conciliação:", e);
+                resultsContent.innerHTML = `<div class="error-message">Ocorreu um erro inesperado ao exibir os resultados. Verifique o console do navegador (F12) para mais detalhes.</div>`;
+            }
+        }
+
+        // ##################################################################
+        // ##       FIM DO NOVO CÓDIGO DE CONCILIAÇÃO                      ##
+        // ##################################################################
+
         document.addEventListener('DOMContentLoaded', function() {
             const openCommandsBtn = document.getElementById('open-commands-guide-btn');
             const commandsModal = document.getElementById('commandsGuideModal');
@@ -645,13 +904,41 @@
             const commandsContent = document.getElementById('commandsGuideContent');
             openCommandsBtn.addEventListener('click', () => { commandsModal.classList.add('show'); if (commandsContent.querySelector('.loading')) { google.script.run .withSuccessHandler(htmlContent => { commandsContent.innerHTML = htmlContent; }) .withFailureHandler(error => { commandsContent.innerHTML = '<div class="error-message">Não foi possível carregar o guia de comandos.</div>'; console.error("Erro ao carregar guia:", error); }) .getCommandsGuideHtml(); } });
             closeCommandsBtn.onclick = () => { commandsModal.classList.remove('show'); };
+            
+            // Lógica de troca de visualização ATUALIZADA
             const dashboardView = document.getElementById('dashboard-view');
             const agendaView = document.getElementById('agenda-view');
+            const reconciliationView = document.getElementById('reconciliation-view');
+            
             const showDashboardBtn = document.getElementById('show-dashboard-view');
             const showAgendaBtn = document.getElementById('show-agenda-view');
-            function switchView(viewToShow) { if (viewToShow === 'agenda') { dashboardView.style.display = 'none'; agendaView.style.display = 'block'; showDashboardBtn.classList.remove('active'); showAgendaBtn.classList.add('active'); initializeCalendar(); } else { agendaView.style.display = 'none'; dashboardView.style.display = 'block'; showAgendaBtn.classList.remove('active'); showDashboardBtn.classList.add('active'); } toggleMenu(false); }
+            
+            function switchView(viewToShow) {
+                dashboardView.style.display = 'none';
+                agendaView.style.display = 'none';
+                reconciliationView.style.display = 'none';
+
+                showDashboardBtn.classList.remove('active');
+                showAgendaBtn.classList.remove('active');
+                showReconciliationBtn.classList.remove('active');
+
+                if (viewToShow === 'agenda') {
+                    agendaView.style.display = 'block';
+                    showAgendaBtn.classList.add('active');
+                    initializeCalendar();
+                } else if (viewToShow === 'reconciliation') {
+                    reconciliationView.style.display = 'block';
+                    showReconciliationBtn.classList.add('active');
+                } else {
+                    dashboardView.style.display = 'block';
+                    showDashboardBtn.classList.add('active');
+                }
+                toggleMenu(false);
+            }
+
             showDashboardBtn.addEventListener('click', () => switchView('dashboard'));
             showAgendaBtn.addEventListener('click', () => switchView('agenda'));
+            showReconciliationBtn.addEventListener('click', () => switchView('reconciliation'));
             function initializeCalendar() { if (calendarInstance) { calendarInstance.updateSize(); return; } const calendarEl = document.getElementById('calendar'); calendarInstance = new FullCalendar.Calendar(calendarEl, { initialView: 'dayGridMonth', locale: 'pt-br', height: '80vh', headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' }, events: function(fetchInfo, successCallback, failureCallback) { google.script.run .withSuccessHandler(response => { if (response.success) { successCallback(response.tasks); } else { showFeedback('Erro ao buscar tarefas: ' + response.message, 'error'); failureCallback(new Error(response.message)); } }) .withFailureHandler(error => { showFeedback('Falha ao comunicar com o servidor da agenda.', 'error'); failureCallback(error); }) .getCalendarTasks(); }, eventDidMount: function(info) { info.el.setAttribute('title', info.event.title); } }); calendarInstance.render(); }
             const today = new Date();
             document.getElementById('month-select').value = today.getMonth();
@@ -670,3 +957,4 @@
     </script>
 </body>
 </html>
+
