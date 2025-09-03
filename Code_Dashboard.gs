@@ -5,6 +5,31 @@
  * @version com getDashboardData refatorada para maior clareza e manutenibilidade.
  */
 
+// ===================================================================================
+// SEÇÃO DE CONCILIAÇÃO BANCÁRIA (CORRIGIDA)
+// ===================================================================================
+
+/**
+ * Recebe o conteúdo de um extrato do frontend, chama o processador e retorna o resultado.
+ * @param {string} fileContent O conteúdo do arquivo como uma string de texto.
+ * @param {string} fileName O nome do arquivo.
+ * @returns {object} O resultado da conciliação.
+ */
+function processBankStatement(fileContent, fileName) {
+  // CORREÇÃO: Chama a função _processBankStatement do arquivo Importador.gs
+  return _processBankStatement(fileContent, fileName);
+}
+
+/**
+ * Recebe as transações selecionadas do frontend e as importa para a planilha.
+ * @param {Array<object>} transactionsToImport As transações a serem adicionadas.
+ * @returns {object} Um objeto de sucesso com os dados do dashboard atualizados.
+ */
+function importNewTransactions(transactionsToImport) {
+  // CORREÇÃO: Chama a função _importNewTransactions do arquivo Importador.gs
+  return _importNewTransactions(transactionsToImport);
+}
+
 /**
  * Serve o arquivo HTML do dashboard como um Web App com verificação de segurança.
  * @param {Object} e O objeto de evento do Apps Script.
@@ -476,6 +501,7 @@ function getDashboardData(mes, ano) {
   const budgetProgress = _getBudgetProgress(dadosOrcamento, dadosTransacoes, currentMonth, currentYear, categoryIconsMap);
   const expensesByCategoryArray = _getExpensesByCategoryChartData(dadosTransacoes, currentMonth, currentYear, categoryIconsMap);
   const netWorthData = calculateNetWorth(); // <-- ADICIONADO
+  const investmentData = _getInvestmentsData(); // <-- ADICIONADO
   
   const categoriasMap = getCategoriesMap();
   const needsWantsSummary = _getNeedsWantsSummary(dadosTransacoes, categoriasMap, currentMonth, currentYear);
@@ -492,7 +518,8 @@ function getDashboardData(mes, ano) {
     budgetProgress: budgetProgress,
     expensesByCategory: expensesByCategoryArray,
     needsWantsSummary: needsWantsSummary,
-    netWorth: netWorthData, // <-- ADICIONADO
+    netWorth: netWorthData,
+    investments: investmentData, // <-- ADICIONADO
     accounts: getAccountsForDropdown(dadosContas),
     categories: getCategoriesForDropdown(dadosCategorias),
     paymentMethods: getPaymentMethodsForDropdown()
