@@ -864,12 +864,16 @@ function excluirLancamentoPorId(idLancamento, chatId) {
 
     const dadosTransacoes = transacoesSheet.getDataRange().getValues();
     const headersTransacoes = dadosTransacoes[0];
-    const colIdTransacao = headersTransacoes.indexOf('ID Transacao');
-    const colDescricao = headersTransacoes.indexOf('Descricao');
-    const colValor = headersTransacoes.indexOf('Valor');
+    const colMap = getColumnMap(headersTransacoes);
+    const colIdTransacao = colMap['ID Transacao'];
+    const colDescricao = colMap['Descricao'];
+    const colValor = colMap['Valor'];
+    const colTipo = colMap['Tipo'];
+    const colConta = colMap['Conta / Cartão'];
 
-    if (colIdTransacao === -1 || colDescricao === -1 || colValor === -1) {
-      throw new Error("Colunas essenciais (ID Transacao, Descricao, Valor) não encontradas na aba 'Transacoes'.");
+
+    if (colIdTransacao === -1 || colDescricao === -1 || colValor === -1 || colTipo === -1 || colConta === -1) {
+      throw new Error("Colunas essenciais não encontradas na aba 'Transacoes'.");
     }
 
     let linhaParaExcluir = -1;
@@ -898,12 +902,32 @@ function excluirLancamentoPorId(idLancamento, chatId) {
       // Lógica existente para reverter contas a pagar
       reverterStatusContaAPagarSeVinculado(idLancamento);
 
-      // Exclui a linha e atualiza os saldos
+      // --- INÍCIO DA MELHORIA: Ajuste Incremental Reverso ---
+      const tipo = lancamentoParaExcluir[colTipo];
+      const conta = lancamentoParaExcluir[colConta];
+      const contasSheet = ss.getSheetByName(SHEET_CONTAS);
+      const dadosContas = contasSheet.getDataRange().getValues();
+      const infoConta = obterInformacoesDaConta(conta, dadosContas);
+
+      let valorReversao;
+      if (infoConta && normalizarTexto(infoConta.tipo) === "cartao de credito") {
+        // Reverter um gasto em cartão de crédito significa DIMINUIR a dívida.
+        // Reverter uma receita (estorno) significa AUMENTAR a dívida.
+        valorReversao = tipo === 'Receita' ? valorLancamento : -valorLancamento;
+      } else {
+        // Reverter um gasto em conta normal significa AUMENTAR o saldo.
+        // Reverter uma receita significa DIMINUIR o saldo.
+        valorReversao = tipo === 'Receita' ? -valorLancamento : valorLancamento;
+      }
+
+      // Exclui a linha e DEPOIS aplica o ajuste
       transacoesSheet.deleteRow(linhaParaExcluir);
       logToSheet(`Lancamento '${descricaoLancamento}' (ID: ${idLancamento}) excluído da aba 'Transacoes'.`, "INFO");
       
-      atualizarSaldosDasContas();
-
+      ajustarSaldoIncrementalmente(contasSheet, conta, valorReversao);
+      logToSheet(`Ajuste incremental de REVERSÃO aplicado para '${conta}'. Valor: ${valorReversao}`, "INFO");
+      // --- FIM DA MELHORIA ---
+      
       enviarMensagemTelegram(chatId, `✅ Lançamento '${escapeMarkdown(descricaoLancamento)}' excluído com sucesso! Saldo e metas atualizados.`);
     } else {
       enviarMensagemTelegram(chatId, `❌ Lançamento com ID *${escapeMarkdown(idLancamento)}* não encontrado.`);
@@ -1566,6 +1590,7 @@ function solicitarNovoValorParaEdicao(chatId, campo) {
 /**
  * MODIFICADO: Processa a entrada do usuário para a edição de um campo específico.
  * Após a edição, busca a transação atualizada e pergunta se o usuário quer editar mais algo.
+ * AGORA INCLUI A LÓGICA DE APRENDIZADO.
  * @param {string} chatId O ID do chat do Telegram.
  * @param {string} usuario O nome do usuário.
  * @param {string} novoValor O novo valor enviado pelo usuário.
@@ -1585,11 +1610,11 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
     return;
   }
 
-  const headers = transacoesSheet.getDataRange().getValues()[0];
+  const allTransactionsData = transacoesSheet.getDataRange().getValues();
+  const headers = allTransactionsData[0];
   const colMap = getColumnMap(headers);
 
   let rowIndex = -1;
-  const allTransactionsData = transacoesSheet.getDataRange().getValues();
   for (let i = 1; i < allTransactionsData.length; i++) {
     if (allTransactionsData[i][colMap["ID Transacao"]] === editState.transactionId) {
       rowIndex = i + 1;
@@ -1607,6 +1632,10 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
   let valorParaSet = novoValor;
   let mensagemSucesso = "";
   let erroValidacao = false;
+
+  const originalDescription = allTransactionsData[rowIndex - 1][colMap["Descricao"]];
+  const originalCategory = allTransactionsData[rowIndex - 1][colMap["Categoria"]];
+  const originalSubcategory = allTransactionsData[rowIndex - 1][colMap["Subcategoria"]];
 
   switch (editState.fieldToEdit) {
     case "data":
@@ -1664,18 +1693,22 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
       const categoriaNormalizadaInput = normalizarTexto(novoValor);
       
       const matchExatoCategoria = dadosCategorias.slice(1).find(row => {
-          const { cleanCategory } = extractIconAndCleanCategory(row[0]);
+          const { cleanCategory } = _extractIconAndCleanCategory(row[0]);
           return normalizarTexto(cleanCategory) === categoriaNormalizadaInput;
       });
 
       if (matchExatoCategoria) {
           valorParaSet = matchExatoCategoria[0].trim();
           mensagemSucesso = "Categoria atualizada!";
+          // Gatilho de aprendizado
+          learnFromCorrection(originalDescription, valorParaSet, originalSubcategory);
       } else {
           const { categoria: detectedCategory } = extrairCategoriaSubcategoria(novoValor, allTransactionsData[rowIndex-1][colMap["Tipo"]], dadosPalavras);
           if (detectedCategory && detectedCategory !== "Não Identificada") {
               valorParaSet = detectedCategory;
               mensagemSucesso = "Categoria atualizada!";
+              // Gatilho de aprendizado
+              learnFromCorrection(originalDescription, valorParaSet, originalSubcategory);
           } else {
               mensagemSucesso = "❌ Categoria não reconhecida. Por favor, digite um nome de categoria existente ou uma palavra-chave válida.";
               erroValidacao = true;
@@ -1694,6 +1727,8 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
           }
           valorParaSet = detectedSubcategory;
           mensagemSucesso = "Subcategoria atualizada!";
+          // Gatilho de aprendizado
+          learnFromCorrection(originalDescription, catOriginal || originalCategory, valorParaSet);
       } else {
           mensagemSucesso = "❌ Subcategoria não reconhecida. Por favor, verifique as palavras-chave da subcategoria.";
           erroValidacao = true;
@@ -1713,7 +1748,6 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
       break;
     case "dataVencimento":
       colIndex = colMap["Data de Vencimento"];
-      // ### INÍCIO DA CORREÇÃO ###
       const parsedDueDate = parseData(novoValor);
       if (!parsedDueDate) {
         mensagemSucesso = "❌ Data de vencimento inválida. Use o formato DD/MM/AAAA.";
@@ -1722,7 +1756,6 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
         valorParaSet = Utilities.formatDate(parsedDueDate, Session.getScriptTimeZone(), "dd/MM/yyyy");
         mensagemSucesso = "Data de vencimento atualizada!";
       }
-      // ### FIM DA CORREÇÃO ###
       break;
     default:
       mensagemSucesso = "❌ Campo de edição desconhecido.";
@@ -1732,7 +1765,6 @@ function processarEdicaoFinal(chatId, usuario, novoValor, editState, dadosContas
 
   if (erroValidacao) {
     enviarMensagemTelegram(chatId, mensagemSucesso);
-    // Não limpa o estado de edição para permitir que o usuário tente novamente
     logToSheet(`[Edicao] Erro de validacao para campo '${editState.fieldToEdit}': ${mensagemSucesso}`, "WARN");
     return;
   }
@@ -2597,3 +2629,366 @@ function enviarPatrimonioLiquido(chatId) {
     handleError(e, "enviarPatrimonioLiquido", chatId);
   }
 }
+
+/**
+ * NOVO: Lida com o comando /meuperfil para iniciar o Quiz Financeiro.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} usuario O nome do usuário.
+ */
+function handleMeuPerfilCommand(chatId, usuario) {
+  // Verifica se um quiz já não está em andamento para evitar confusão
+  const existingState = getQuizState(chatId);
+  if (existingState && existingState.currentQuestion < QUIZ_QUESTIONS.length) {
+    enviarMensagemTelegram(chatId, "Parece que você já tem um quiz em andamento. Vamos continuar de onde parou.");
+    sendQuizQuestion(chatId, existingState);
+  } else {
+    enviarMensagemTelegram(chatId, "Olá! Vamos descobrir qual é o seu perfil financeiro. Responda às próximas 5 perguntas.");
+    startFinancialQuiz(chatId, usuario);
+  }
+}
+
+// ===================================================================================
+// ### INÍCIO DAS NOVAS FUNÇÕES DE GESTÃO DE INVESTIMENTOS ###
+// ===================================================================================
+
+/**
+ * Lida com o comando para registrar a compra de um ativo.
+ * É chamado tanto por linguagem natural (de FinancialLogic.gs) quanto por comando direto.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} ticker O código do ativo (ex: ITSA4).
+ * @param {number} quantidade A quantidade de ativos comprados.
+ * @param {number} preco O preço unitário de compra.
+ * @param {string} nomeCorretora O nome da conta/corretora de onde o dinheiro saiu.
+ * @param {string} usuario O nome do usuário que fez a compra.
+ */
+function handleComprarAtivo(chatId, ticker, quantidade, preco, nomeCorretora, usuario) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    // Validação dos dados de entrada
+    if (!ticker || isNaN(quantidade) || quantidade <= 0 || isNaN(preco) || preco < 0 || !nomeCorretora) {
+      enviarMensagemTelegram(chatId, "❌ Dados inválidos para a compra. Verifique o ticker, quantidade, preço e corretora.");
+      return;
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const investimentosSheet = ss.getSheetByName(SHEET_INVESTIMENTOS);
+    const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+    const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
+
+    // Verifica se a conta/corretora de origem existe
+    const corretoraInfo = obterInformacoesDaConta(nomeCorretora, dadosContas);
+    if (!corretoraInfo) {
+      enviarMensagemTelegram(chatId, `❌ Conta/Corretora "${escapeMarkdown(nomeCorretora)}" não encontrada.`);
+      return;
+    }
+
+    const valorTotalCompra = quantidade * preco;
+
+    // Procura pelo ativo na aba 'Investimentos'
+    const dadosInvestimentos = investimentosSheet.getDataRange().getValues();
+    let ativoRowIndex = -1;
+    for (let i = 1; i < dadosInvestimentos.length; i++) {
+      if (dadosInvestimentos[i][0].toUpperCase() === ticker.toUpperCase()) {
+        ativoRowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (ativoRowIndex !== -1) {
+      // Ativo já existe, atualiza a posição (preço médio)
+      const qtdAtual = parseFloat(dadosInvestimentos[ativoRowIndex - 1][2]) || 0;
+      const valorInvestidoAtual = parseBrazilianFloat(String(dadosInvestimentos[ativoRowIndex - 1][4]));
+      
+      const novaQtd = qtdAtual + quantidade;
+      const novoValorInvestido = valorInvestidoAtual + valorTotalCompra;
+      const novoPrecoMedio = novoValorInvestido / novaQtd;
+
+      investimentosSheet.getRange(ativoRowIndex, 3).setValue(novaQtd); // Coluna C: Quantidade
+      investimentosSheet.getRange(ativoRowIndex, 4).setValue(novoPrecoMedio); // Coluna D: Preço Médio
+    } else {
+      // Novo ativo, adiciona uma nova linha com as fórmulas
+      const proximaLinha = investimentosSheet.getLastRow() + 1;
+      investimentosSheet.appendRow([
+        ticker.toUpperCase(),
+        "Ação/FII", // Tipo genérico
+        quantidade,
+        preco,
+        `=C${proximaLinha}*D${proximaLinha}`, // Fórmula do Valor Investido
+        `=GOOGLEFINANCE("${ticker}")`, // Fórmula do Preço Atual
+        `=C${proximaLinha}*F${proximaLinha}`, // Fórmula do Valor Atual
+        `=G${proximaLinha}-E${proximaLinha}`, // Fórmula do Lucro/Prejuízo
+        "Aberta"
+      ]);
+    }
+
+    // Registra a transação de DESPESA correspondente
+    transacoesSheet.appendRow([
+      new Date(),
+      `Compra de ${quantidade} ${ticker.toUpperCase()}`,
+      "📈 Investimentos / Futuro",
+      "Compra de Ativos",
+      "Despesa",
+      valorTotalCompra,
+      "Transferência", // Método de pagamento
+      corretoraInfo.nomeOriginal,
+      1, 1, new Date(),
+      usuario,
+      "Ativo",
+      Utilities.getUuid(),
+      new Date()
+    ]);
+    
+    // Ajuste incremental do saldo da conta de origem
+    const contasSheet = ss.getSheetByName(SHEET_CONTAS);
+    ajustarSaldoIncrementalmente(contasSheet, corretoraInfo.nomeOriginal, -valorTotalCompra);
+
+    // Envia a mensagem de sucesso
+    enviarMensagemTelegram(chatId, `✅ Compra de *${quantidade} ${escapeMarkdown(ticker.toUpperCase())}* registada com sucesso! O valor de ${formatCurrency(valorTotalCompra)} foi debitado de ${corretoraInfo.nomeOriginal}.`);
+  
+  } catch (e) {
+    handleError(e, "handleComprarAtivo", chatId);
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
+}
+
+/**
+ * Lida com o comando para registrar a venda de um ativo.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} ticker O código do ativo (ex: ITSA4).
+ * @param {number} quantidade A quantidade de ativos vendidos.
+ * @param {number} preco O preço unitário de venda.
+ * @param {string} nomeContaDestino O nome da conta/corretora para onde o dinheiro foi.
+ * @param {string} usuario O nome do usuário que fez a venda.
+ */
+function handleVenderAtivo(chatId, ticker, quantidade, preco, nomeContaDestino, usuario) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    // Validação dos dados
+    if (!ticker || isNaN(quantidade) || quantidade <= 0 || isNaN(preco) || preco <= 0 || !nomeContaDestino) {
+      enviarMensagemTelegram(chatId, "❌ Dados inválidos. Verifique o ticker, quantidade, preço e conta de destino.");
+      return;
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const investimentosSheet = ss.getSheetByName(SHEET_INVESTIMENTOS);
+    const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+    const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
+
+    // Verifica se a conta de destino existe
+    const contaDestinoInfo = obterInformacoesDaConta(nomeContaDestino, dadosContas);
+    if (!contaDestinoInfo) {
+      enviarMensagemTelegram(chatId, `❌ Conta de destino "${escapeMarkdown(nomeContaDestino)}" não encontrada.`);
+      return;
+    }
+
+    const valorTotalVenda = quantidade * preco;
+
+    // Encontra o ativo na planilha
+    const dadosInvestimentos = investimentosSheet.getDataRange().getValues();
+    let ativoRowIndex = -1;
+    for (let i = 1; i < dadosInvestimentos.length; i++) {
+      if (dadosInvestimentos[i][0].toUpperCase() === ticker.toUpperCase()) {
+        ativoRowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (ativoRowIndex === -1) {
+      enviarMensagemTelegram(chatId, `❌ Ativo *${escapeMarkdown(ticker.toUpperCase())}* não encontrado na sua carteira.`);
+      return;
+    }
+
+    const qtdAtual = parseFloat(dadosInvestimentos[ativoRowIndex - 1][2]) || 0;
+    if (quantidade > qtdAtual) {
+      enviarMensagemTelegram(chatId, `❌ Você não pode vender ${quantidade} de ${escapeMarkdown(ticker.toUpperCase())}. Você possui apenas ${qtdAtual}.`);
+      return;
+    }
+
+    // Atualiza a quantidade ou o status na aba 'Investimentos'
+    const novaQtd = qtdAtual - quantidade;
+    investimentosSheet.getRange(ativoRowIndex, 3).setValue(novaQtd); // Coluna C: Quantidade
+
+    if (novaQtd === 0) {
+      investimentosSheet.getRange(ativoRowIndex, 9).setValue("Fechada"); // Coluna I: Status
+    }
+
+    // Registra a transação de RECEITA correspondente
+    transacoesSheet.appendRow([
+      new Date(),
+      `Venda de ${quantidade} ${ticker.toUpperCase()}`,
+      "📈 Investimentos / Futuro",
+      "Venda de Ativos",
+      "Receita",
+      valorTotalVenda,
+      "Transferência", // Método de pagamento
+      contaDestinoInfo.nomeOriginal,
+      1, 1, new Date(),
+      usuario,
+      "Ativo",
+      Utilities.getUuid(),
+      new Date()
+    ]);
+    
+    // OTIMIZAÇÃO: Ajusta o saldo incrementalmente
+    const contasSheet = ss.getSheetByName(SHEET_CONTAS);
+    ajustarSaldoIncrementalmente(contasSheet, contaDestinoInfo.nomeOriginal, valorTotalVenda);
+
+    enviarMensagemTelegram(chatId, `✅ Venda de *${quantidade} ${escapeMarkdown(ticker.toUpperCase())}* registada com sucesso! O valor de ${formatCurrency(valorTotalVenda)} foi creditado em ${contaDestinoInfo.nomeOriginal}.`);
+
+  } catch (e) {
+    handleError(e, "handleVenderAtivo", chatId);
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
+}
+
+// ===================================================================================
+// ### FIM DAS NOVAS FUNÇÕES DE GESTÃO DE INVESTIMENTOS ###
+// ===================================================================================
+
+/// ===================================================================================
+// ##      NOVAS FUNÇÕES PARA DIVISÃO DE DESPESAS E EMPRÉSTIMOS (VERSÃO ATUALIZADA)   ##
+// ===================================================================================
+
+/**
+ * Lida com o comando /dividir, registando uma despesa e criando uma conta a receber pela metade do valor.
+ * @param {string} chatId - O ID do chat do Telegram.
+ * @param {string} usuario - O nome do utilizador que está a dividir a despesa.
+ * @param {number} valorTotal - O valor total da despesa.
+ * @param {string} descricao - A descrição da despesa.
+ * @param {string} pessoa - O nome da pessoa com quem a despesa foi dividida.
+ * @param {string} restoDaFrase - O resto da frase que pode conter a conta de pagamento.
+ */
+function handleDividirDespesa(chatId, usuario, valorTotal, descricao, pessoa, restoDaFrase) {
+  try {
+    const valorAReceber = valorTotal / 2;
+    const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
+    const dadosPalavras = getSheetDataWithCache(SHEET_PALAVRAS_CHAVE, CACHE_KEY_PALAVRAS);
+
+    // ATUALIZADO: Lógica mais robusta para separar a pessoa da conta
+    const separadoresConta = ['pelo', 'pela', 'no', 'na', 'usando', 'com'];
+    let nomePessoa = '';
+    let stringDaConta = '';
+    let separadorEncontrado = false;
+
+    const palavras = restoDaFrase.split(' ');
+    for (let i = 0; i < palavras.length; i++) {
+        if (separadoresConta.includes(palavras[i].toLowerCase()) && i > 0) {
+            nomePessoa = palavras.slice(0, i).join(' ');
+            stringDaConta = palavras.slice(i + 1).join(' ');
+            separadorEncontrado = true;
+            break;
+        }
+    }
+
+    if (!separadorEncontrado) {
+        nomePessoa = restoDaFrase; // Assume que a frase toda é a pessoa se não encontrar separador
+        stringDaConta = restoDaFrase; // Tenta encontrar a conta na frase toda como fallback
+    }
+    
+    // Extrai a conta de pagamento da string isolada
+    const { conta, metodoPagamento } = extrairContaMetodoPagamento(stringDaConta, dadosContas, dadosPalavras);
+    
+    if (conta === "Não Identificada") {
+      enviarMensagemTelegram(chatId, `❌ Não consegui identificar a conta de pagamento. Tente novamente, por exemplo: \`/dividir 100 do jantar com Gisa pelo Itau\``);
+      return;
+    }
+
+    // 1. Registar a despesa completa
+    const despesaId = Utilities.getUuid();
+    registrarTransacaoNaPlanilha(new Date(), `(Dividido) ${capitalize(descricao)}`, 'Lazer', 'Saídas', 'Despesa', valorTotal, metodoPagamento, conta, 1, 1, new Date(), usuario, 'Ativo', despesaId, new Date());
+    logToSheet(`[Dividir] Despesa total de ${valorTotal} registada para ${usuario} na conta ${conta}.`, "INFO");
+
+    // 2. Criar a conta a receber
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const contasAPagarSheet = ss.getSheetByName(SHEET_CONTAS_A_PAGAR);
+    const hoje = new Date();
+    const dataVencimento = new Date(hoje.getFullYear(), hoje.getMonth() + 1, hoje.getDate()); // Vencimento em 30 dias
+
+    const newRow = [
+      Utilities.getUuid(),
+      `Valor a receber de ${capitalize(nomePessoa)} (${capitalize(descricao)})`, // Descrição melhorada
+      'Contas a Receber',
+      valorAReceber,
+      Utilities.formatDate(dataVencimento, Session.getScriptTimeZone(), "dd/MM/yyyy"),
+      'Pendente',
+      'Falso', // Não é recorrente
+      conta,   // Sugestão de conta para receber
+      `Referente à despesa dividida ID: ${despesaId}`,
+      ''
+    ];
+    contasAPagarSheet.appendRow(newRow);
+    logToSheet(`[Dividir] Conta a receber de ${valorAReceber} criada para ${nomePessoa}.`, "INFO");
+
+    // 3. Enviar confirmação
+    const mensagem = `✅ Despesa dividida com sucesso!\n\n` +
+                     `- Registado um gasto de *${formatCurrency(valorTotal)}* na sua conta *${escapeMarkdown(conta)}*.\n` +
+                     `- Criado um lembrete para receber *${formatCurrency(valorAReceber)}* de *${escapeMarkdown(capitalize(nomePessoa))}*.`;
+    enviarMensagemTelegram(chatId, mensagem);
+    
+    atualizarSaldosDasContas();
+
+  } catch (e) {
+    handleError(e, "handleDividirDespesa", chatId);
+  }
+}
+
+/**
+ * Lida com o comando /emprestei, registando uma despesa e criando uma conta a receber pelo valor total.
+ * @param {string} chatId - O ID do chat do Telegram.
+ * @param {string} usuario - O nome do utilizador que está a emprestar.
+ * @param {number} valor - O valor emprestado.
+ * @param {string} pessoaEDesc - A string que contém o nome da pessoa e a descrição.
+ * @param {string} conta - A conta de onde o dinheiro saiu.
+ */
+function handleEmprestarValor(chatId, usuario, valor, pessoaEDesc, conta) {
+  try {
+    if (conta === "Não Identificada") {
+      enviarMensagemTelegram(chatId, `❌ Não consegui identificar a conta de onde o dinheiro saiu. Tente novamente, por exemplo: \`/emprestei 150 para a mamã com o Nubank\``);
+      return;
+    }
+    
+    // 1. Registar a despesa (saída do dinheiro)
+    const despesaId = Utilities.getUuid();
+    registrarTransacaoNaPlanilha(new Date(), `Empréstimo para ${capitalize(pessoaEDesc)}`, 'Outros', 'Empréstimos Concedidos', 'Despesa', valor, 'Transferência', conta, 1, 1, new Date(), usuario, 'Ativo', despesaId, new Date());
+    logToSheet(`[Emprestei] Saída de ${valor} registada para ${usuario} da conta ${conta}.`, "INFO");
+    
+    // 2. Criar a conta a receber pelo valor total
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const contasAPagarSheet = ss.getSheetByName(SHEET_CONTAS_A_PAGAR);
+    const hoje = new Date();
+    const dataVencimento = new Date(hoje.getFullYear(), hoje.getMonth() + 1, hoje.getDate());
+
+    const newRow = [
+      Utilities.getUuid(),
+      `Valor a receber de ${capitalize(pessoaEDesc)}`,
+      'Contas a Receber',
+      valor,
+      Utilities.formatDate(dataVencimento, Session.getScriptTimeZone(), "dd/MM/yyyy"),
+      'Pendente',
+      'Falso',
+      conta,
+      `Referente ao empréstimo ID: ${despesaId}`,
+      ''
+    ];
+    contasAPagarSheet.appendRow(newRow);
+    logToSheet(`[Emprestei] Conta a receber de ${valor} criada para ${pessoaEDesc}.`, "INFO");
+
+    // 3. Enviar confirmação
+    const mensagem = `✅ Empréstimo registado com sucesso!\n\n` +
+                     `- Registada uma saída de *${formatCurrency(valor)}* da sua conta *${escapeMarkdown(conta)}*.\n` +
+                     `- Criado um lembrete para receber *${formatCurrency(valor)}* de *${escapeMarkdown(capitalize(pessoaEDesc))}*.`;
+    enviarMensagemTelegram(chatId, mensagem);
+    
+    atualizarSaldosDasContas();
+
+  } catch (e) {
+    handleError(e, "handleEmprestarValor", chatId);
+  }
+}
+
