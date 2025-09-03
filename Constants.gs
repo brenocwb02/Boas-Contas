@@ -36,6 +36,7 @@ const SHEET_ORCAMENTO = "Orcamento"; // Mantido para consistência
 const SHEET_ALERTAS_ENVIADOS = "AlertasEnviados"; // Adicionado para rastrear alertas
 const SHEET_CONTAS_A_PAGAR = "Contas_a_Pagar"; // Adicionado para contas fixas
 const SHEET_NOTIFICACOES_CONFIG = 'Notificacoes_Config'; // Adicionado para configuracoes de notificacoes
+const SHEET_LEARNED_CATEGORIES = "LearnedCategories";
 
 // --- Constantes de Cache ---
 const CACHE_KEY_PALAVRAS = 'palavras_chave_cache';
@@ -104,5 +105,6 @@ const HEADERS = {
   [SHEET_FATURAS]: ["ID Fatura", "Cartao", "Mes Referencia", "Data Fechamento", "Data Vencimento", "Valor Total", "Valor Pago", "Status", "ID Transacao Pagamento"], // Seus cabeçalhos podem variar
   [SHEET_ORCAMENTO]: ["ID Orcamento", "Mes referencia", "Categoria", "Valor Orcado", "Valor Gasto"], // Seus cabeçalhos podem variar
   [SHEET_NOTIFICACOES_CONFIG]: ["Chat ID", "Usuário", "Alertas Orçamento", "Lembretes Contas a Pagar", "Resumo Diário", "Hora Resumo Diário (HH:mm)", "Resumo Semanal", "Dia Resumo Semanal (0-6)", "Hora Resumo Semanal (HH:mm)"],
-  [SHEET_PALAVRAS_CHAVE]: ["Tipo da Palavra-Chave", "Palavra-Chave", "Valor Interpretado"] // Seus cabeçalhos podem variar
+  [SHEET_PALAVRAS_CHAVE]: ["Tipo da Palavra-Chave", "Palavra-Chave", "Valor Interpretado"], // Seus cabeçalhos podem variar
+  [SHEET_LEARNED_CATEGORIES]: ["Keyword", "Categoria", "Subcategoria", "ConfidenceScore", "LastUpdated"]
 };
