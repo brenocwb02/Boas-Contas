@@ -47,7 +47,7 @@ function getSheetDataWithCache(sheetName, cacheKey, expirationInSeconds = 300) {
 
 /**
  * ATUALIZADO: Interpreta uma mensagem do Telegram para extrair informações de transação.
- * Agora com lógica de assistente inteligente para solicitar informações faltantes.
+ * Agora salva a categoria original para acionar o aprendizado.
  * @param {string} mensagem O texto da mensagem recebida.
  * @param {string} usuario O nome do usuário que enviou a mensagem.
  * @param {string} chatId O ID do chat do Telegram.
@@ -58,11 +58,58 @@ function interpretarMensagemTelegram(mensagem, usuario, chatId) {
 
   const dadosPalavras = getSheetDataWithCache(SHEET_PALAVRAS_CHAVE, CACHE_KEY_PALAVRAS);
   const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
-
+  
+  // ### INÍCIO DA CORREÇÃO DE LÓGICA ###
+  // Texto para parsing de números, que mantém a pontuação (vírgulas, pontos) e remove acentos.
+  const textoParaParseNumeros = mensagem.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Texto para busca de palavras-chave, que remove toda a pontuação.
   const textoNormalizado = normalizarTexto(mensagem);
-  logToSheet(`Texto normalizado: "${textoNormalizado}"`, "DEBUG");
+  
+  // ### INÍCIO DA NOVA LÓGICA DE DIVISÃO E EMPRÉSTIMO ###
+  const dividirMatch = textoNormalizado.match(/(?:dividi|dividir)\s+([\d.,]+)\s+(?:de|do|da)?\s*(.*?)\s+com\s+(.+)/i);
+  const empresteiMatch = textoNormalizado.match(/(?:emprestei|adiantei)\s+([\d.,]+)\s+(?:para)?\s*(.*?)(?=\s+com|\s+pelo|\s+pela|$)/i);
+  
+  if (dividirMatch) {
+    const valor = parseBrazilianFloat(dividirMatch[1]);
+    const descricao = dividirMatch[2];
+    const pessoa = dividirMatch[3].split(/\s+(?:com|pelo|pela)\s+/)[0]; // Pega o nome da pessoa
+    const restoDaFrase = dividirMatch[3]; // O resto da frase pode conter a conta
+    handleDividirDespesa(chatId, usuario, valor, descricao, pessoa, restoDaFrase);
+    return { handled: true };
+  }
+  
+  if (empresteiMatch) {
+    const valor = parseBrazilianFloat(empresteiMatch[1]);
+    const pessoaEDesc = empresteiMatch[2]; // Pode conter a pessoa e a descrição
+    const { conta } = extrairContaMetodoPagamento(textoNormalizado, dadosContas, dadosPalavras);
+    handleEmprestarValor(chatId, usuario, valor, pessoaEDesc, conta);
+    return { handled: true };
+  }
+  // ### FIM DA NOVA LÓGICA ###
 
-  // --- 1. Detectar Tipo (Despesa, Receita, Transferência) ---
+
+  // Verifica PRIMEIRO se a mensagem é sobre compra ou venda de ativos, usando o texto com pontuação.
+  const investmentMatch = textoParaParseNumeros.match(/(comprei|vendi)\s+(\d+[\d.,]*)\s+(?:acoes de|de|do|da)?\s*([a-zA-Z0-9]+)\s*(?:a|por)\s+([\d.,]+(?:[\s]reais)?(?:[\s]e[\s][\d]+)?(?:[\s]centavos)?)\s*(?:pela|pelo|na|no|da|do)?\s*(.+)/i);
+
+  if (investmentMatch) {
+    const acao = investmentMatch[1].toLowerCase();
+    const quantidade = parseInt(investmentMatch[2].replace(/\./g, ''));
+    const ticker = investmentMatch[3].toUpperCase();
+    const precoTexto = investmentMatch[4];
+    const nomeCorretora = investmentMatch[5].trim();
+    const preco = parseBrazilianFloat(precoTexto); // CORREÇÃO: Usa a função parseBrazilianFloat diretamente
+    
+    logToSheet(`[Investimento Detectado] Ação: ${acao}, Qtd: ${quantidade}, Ticker: ${ticker}, Preço: ${preco}, Corretora: ${nomeCorretora}`, "INFO");
+
+    if (acao === 'comprei') {
+      handleComprarAtivo(chatId, ticker, quantidade, preco, nomeCorretora, usuario);
+    } else if (acao === 'vendi') {
+      handleVenderAtivo(chatId, ticker, quantidade, preco, nomeCorretora, usuario);
+    }
+    return { handled: true }; // Indica que a mensagem foi tratada e interrompe o processamento
+  }
+  
+  // O resto da função continua usando a variável apropriada para cada tarefa.
   const tipoInfo = detectarTipoTransacao(textoNormalizado, dadosPalavras);
   if (!tipoInfo) {
     return { errorMessage: "Não consegui identificar se é uma despesa, receita ou transferência. Tente ser mais claro." };
@@ -71,18 +118,18 @@ function interpretarMensagemTelegram(mensagem, usuario, chatId) {
   const keywordTipo = tipoInfo.keyword;
   logToSheet(`Tipo de transação detectado: ${tipoTransacao} (keyword: ${keywordTipo})`, "DEBUG");
 
-  // --- Coleta de Informações Parciais ---
-  const valor = extrairValor(textoNormalizado);
-  const transactionId = Utilities.getUuid().substring(0, 8); // ID curto para o assistente
+  // Usa o texto com pontuação para extrair o valor corretamente.
+  const valor = extrairValor(textoParaParseNumeros);
+  const transactionId = Utilities.getUuid().substring(0, 8);
+  // ### FIM DA CORREÇÃO DE LÓGICA ###
 
-  // --- Lógica de Transferência Integrada ao Assistente ---
   if (tipoTransacao === "Transferência") {
       if (isNaN(valor) || valor <= 0) {
         return { errorMessage: "Não consegui identificar o valor da transferência." };
       }
       const { contaOrigem, contaDestino } = extrairContasTransferencia(textoNormalizado, dadosContas, dadosPalavras);
       
-      const transacaoParcial = {
+      const transacaoParcialTransfer = { // Renomeada para evitar conflito de escopo
         id: transactionId,
         tipo: "Transferência",
         valor: valor,
@@ -92,17 +139,15 @@ function interpretarMensagemTelegram(mensagem, usuario, chatId) {
       };
 
       if (contaOrigem === "Não Identificada") {
-        return solicitarInformacaoFaltante("conta_origem", transacaoParcial, chatId);
+        return solicitarInformacaoFaltante("conta_origem", transacaoParcialTransfer, chatId);
       }
       if (contaDestino === "Não Identificada") {
-        return solicitarInformacaoFaltante("conta_destino", transacaoParcial, chatId);
+        return solicitarInformacaoFaltante("conta_destino", transacaoParcialTransfer, chatId);
       }
       
-      // Se ambas as contas foram encontradas, prepara a confirmação
-      return prepararConfirmacaoTransferencia(transacaoParcial, chatId);
+      return prepararConfirmacaoTransferencia(transacaoParcialTransfer, chatId);
   }
 
-  // --- Lógica para Despesa e Receita ---
   const { conta, infoConta, metodoPagamento } = extrairContaMetodoPagamento(textoNormalizado, dadosContas, dadosPalavras);
   const { categoria, subcategoria } = extrairCategoriaSubcategoria(textoNormalizado, tipoTransacao, dadosPalavras);
   const parcelasTotais = extrairParcelas(textoNormalizado);
@@ -114,6 +159,7 @@ function interpretarMensagemTelegram(mensagem, usuario, chatId) {
     descricao: descricao,
     categoria: categoria,
     subcategoria: subcategoria,
+    originalCategory: categoria, // <-- ADICIONADO: Salva a categoria original detectada
     tipo: tipoTransacao,
     valor: valor,
     metodoPagamento: metodoPagamento,
@@ -127,7 +173,6 @@ function interpretarMensagemTelegram(mensagem, usuario, chatId) {
     dataRegistro: new Date()
   };
 
-  // --- Validação e Fluxo de Assistência Inteligente ---
   if (isNaN(valor) || valor <= 0) {
     return solicitarInformacaoFaltante("valor", transacaoParcial, chatId);
   }
@@ -141,7 +186,6 @@ function interpretarMensagemTelegram(mensagem, usuario, chatId) {
     return solicitarInformacaoFaltante("metodo", transacaoParcial, chatId);
   }
 
-  // --- Se tudo estiver OK, prossegue para confirmação ---
   let dataVencimentoFinal = new Date();
   let isCreditCardTransaction = false;
   if (infoConta && normalizarTexto(infoConta.tipo) === "cartao de credito") {
@@ -151,6 +195,12 @@ function interpretarMensagemTelegram(mensagem, usuario, chatId) {
   transacaoParcial.dataVencimento = dataVencimentoFinal;
   transacaoParcial.isCreditCardTransaction = isCreditCardTransaction;
   transacaoParcial.finalId = Utilities.getUuid();
+  
+  // Lógica de Nudge movida para antes da confirmação
+  const nudgeMessage = getNudgeMessage(chatId, transacaoParcial);
+  if (nudgeMessage) {
+      transacaoParcial.nudge = nudgeMessage;
+  }
 
   if (parcelasTotais > 1) {
     return prepararConfirmacaoParcelada(transacaoParcial, chatId);
@@ -399,14 +449,17 @@ function detectarTipoTransacao(mensagemCompleta, dadosPalavras) {
 }
 
 /**
- * Extrai o valor numérico da mensagem.
+ * ATUALIZADO: Extrai o valor numérico da mensagem.
+ * Agora, a função `parseBrazilianFloat` lida corretamente com as diversas formatações.
  * @param {string} textoNormalizado O texto da mensagem normalizado.
  * @returns {number} O valor numérico extraído, ou NaN.
  */
 function extrairValor(textoNormalizado) {
+  // A regex agora é mais simples, apenas para encontrar um bloco que parece um número.
+  // A complexidade da formatação é delegada para a função parseBrazilianFloat.
   const regex = /(\d[\d\.,]*)/; 
   const match = textoNormalizado.match(regex);
-  if (match) {
+  if (match && match[1]) {
     return parseBrazilianFloat(match[1]); 
   }
   return NaN;
@@ -485,13 +538,24 @@ function extrairContaMetodoPagamento(textoNormalizado, dadosContas, dadosPalavra
 
 
 /**
- * CORRIGIDO: Extrai categoria, subcategoria e a palavra-chave correspondente usando correspondência de palavra inteira.
+ * ATUALIZADO: Extrai categoria e subcategoria, priorizando o conhecimento aprendido.
  * @param {string} textoNormalizado O texto da mensagem normalizado.
  * @param {string} tipoTransacao O tipo de transação (Despesa, Receita).
  * @param {Array<Array<any>>} dadosPalavras Os dados da aba 'PalavrasChave'.
  * @returns {Object} Objeto com categoria, subcategoria e keywordCategoria.
  */
 function extrairCategoriaSubcategoria(textoNormalizado, tipoTransacao, dadosPalavras) {
+  // --- PASSO 1: Tenta encontrar uma categoria aprendida de alta confiança ---
+  const learned = findLearnedCategory(textoNormalizado);
+  if (learned) {
+      return {
+          categoria: learned.categoria,
+          subcategoria: learned.subcategoria,
+          keywordCategoria: learned.keyword // Usa a keyword que ativou a regra
+      };
+  }
+
+  // --- PASSO 2: Se não encontrou, usa a lógica original com PalavrasChave ---
   let categoriaEncontrada = "Não Identificada";
   let subcategoriaEncontrada = "Não Identificada";
   let melhorScoreSubcategoria = -1;
@@ -503,7 +567,6 @@ function extrairCategoriaSubcategoria(textoNormalizado, tipoTransacao, dadosPala
     const valorInterpretado = (dadosPalavras[i][2] || "").toString().trim();
 
     if (tipoPalavraChave === "subcategoria" && palavraChave) {
-        // CORREÇÃO: Usa regex para encontrar a palavra-chave como uma palavra inteira
         const regex = new RegExp(`\\b${palavraChave}\\b`, 'i');
         if (regex.test(textoNormalizado)) {
             const similarity = calculateSimilarity(textoNormalizado, palavraChave); 
@@ -531,6 +594,7 @@ function extrairCategoriaSubcategoria(textoNormalizado, tipoTransacao, dadosPala
       keywordCategoria: melhorPalavraChaveCategoria
   };
 }
+
 
 
 /**
@@ -562,13 +626,20 @@ function extrairDescricao(textoNormalizado, valor, keywordsToRemove) {
     }
   });
   
-  // 4. Limpa preposições comuns que podem sobrar
+
+  // 4. NOVO: Remove variações de moeda
+  const currencyWords = ['reais', 'real', 'r'];
+  currencyWords.forEach(word => {
+    descricao = descricao.replace(new RegExp(`\\s+${word}\\s+`, 'gi'), " ");
+  });
+
+  // 5. Limpa preposições comuns que podem sobrar
   const preposicoes = ['de', 'da', 'do', 'dos', 'das', 'e', 'ou', 'a', 'o', 'no', 'na', 'nos', 'nas', 'com', 'em', 'para', 'por', 'pelo', 'pela', 'via'];
   preposicoes.forEach(prep => {
     descricao = descricao.replace(new RegExp(`\\s+${prep}\\s+`, 'gi'), " ");
   });
 
-  // 5. Limpa espaços extras e retorna
+  // 6. Limpa espaços extras e retorna
   descricao = descricao.replace(/\s+/g, " ").trim();
   
   if (descricao.length < 2) {
@@ -592,6 +663,7 @@ function extrairParcelas(textoNormalizado) {
 /**
  * Prepara e envia uma mensagem de confirmação para transações simples (não parceladas).
  * Armazena os dados da transação em cache.
+ * **AGORA INCLUI A LÓGICA DE NUDGE COMPORTAMENTAL.**
  * @param {Object} transacaoData Os dados da transação.
  * @param {string} chatId O ID do chat do Telegram.
  * @returns {Object} Status de confirmação pendente.
@@ -609,6 +681,11 @@ function prepararConfirmacaoSimples(transacaoData, chatId) {
   mensagem += `*Metodo:* ${escapeMarkdown(transacaoData.metodoPagamento)}\n`;
   mensagem += `*Categoria:* ${escapeMarkdown(transacaoData.categoria)}\n`;
   mensagem += `*Subcategoria:* ${escapeMarkdown(transacaoData.subcategoria)}\n`;
+  
+  // Adiciona a mensagem de nudge no topo, se ela existir
+  if (transacaoData.nudge) {
+    mensagem = `*${transacaoData.nudge}*\n\n` + mensagem;
+  }
 
   const teclado = {
     inline_keyboard: [
@@ -620,6 +697,61 @@ function prepararConfirmacaoSimples(transacaoData, chatId) {
   enviarMensagemTelegram(chatId, mensagem, { reply_markup: teclado });
   return { status: "PENDING_CONFIRMATION", transactionId: transacaoData.finalId };
 }
+
+/**
+ * **FUNÇÃO ATUALIZADA**
+ * Analisa uma transação pendente e o perfil do usuário para gerar uma mensagem
+ * de "nudge" (empurrãozinho) comportamental, se aplicável.
+ * @param {string} chatId O ID do chat do usuário.
+ * @param {Object} transacao Os dados da transação pendente.
+ * @returns {string|null} A mensagem de nudge ou null se nenhuma for aplicável.
+ */
+function getNudgeMessage(chatId, transacao) {
+  // ATUALIZADO: Agora chama a função correta
+  const perfilUsuario = getFinancialProfile(chatId); 
+  
+  if (!perfilUsuario || perfilUsuario.inProgress || transacao.tipo !== 'Despesa') {
+    return null; // Só aplica nudges para despesas e se o perfil for conhecido e o quiz não estiver em andamento
+  }
+
+  const perfil = perfilUsuario.perfil;
+  let nudge = null;
+
+  // Lógica de gatilho para o perfil "Despreocupado"
+  if (perfil === 'Despreocupado') {
+    // Gatilho 1: Gasto alto em categorias de "Desejos"
+    const categoriasDesejo = ['lazer e entretenimento', 'despesas pessoais'];
+    if (categoriasDesejo.includes(normalizarTexto(transacao.categoria)) && transacao.valor > 150) {
+      nudge = "⚠️ Atenção, Despreocupado! Este é um gasto por impulso ou está planeado? Lembre-se do seu desafio de criar o hábito de poupar.";
+    }
+  }
+
+  // Lógica de gatilho para o perfil "Sonhador"
+  if (perfil === 'Sonhador') {
+    const totalMetas = getTotalGoalsSaved(); // Função de apoio do Quiz.gs
+    // Gatilho 1: Gasto não essencial quando as metas estão com poucos aportes
+    if (totalMetas < 500 && transacao.valor > 100 && normalizarTexto(transacao.categoria) !== 'moradia') {
+       nudge = `🤔 Olá, Sonhador! Este gasto de ${formatCurrency(transacao.valor)} te aproxima ou te afasta dos seus grandes sonhos?`;
+    }
+  }
+  
+  // Lógica de gatilho para o perfil "Construtor"
+  if (perfil === 'Construtor') {
+      // Gatilho 1: Muitos gastos pequenos não categorizados podem indicar falta de atenção ao "micro"
+      if (normalizarTexto(transacao.categoria) === 'não identificada' && transacao.valor < 50) {
+          nudge = "🔎 Olá, Construtor! Notamos um gasto não categorizado. Lembre-se que cuidar dos pequenos detalhes também otimiza o seu património.";
+      }
+  }
+
+  if (nudge) {
+    logToSheet(`[Nudge Gerado] Perfil: ${perfil}, Categoria: ${transacao.categoria}, Valor: ${transacao.valor}. Mensagem: ${nudge}`, "INFO");
+  }
+  
+  return nudge;
+}
+
+
+
 
 /**
  * Prepara e envia uma mensagem de confirmação para transações parceladas.
@@ -657,7 +789,8 @@ function prepararConfirmacaoParcelada(transacaoData, chatId) {
 }
 
 /**
- * OTIMIZADO: Registra a transação confirmada na planilha e ajusta os saldos de forma incremental.
+ * OTIMIZADO: Registra a transação confirmada na planilha e ajusta os saldos.
+ * AGORA TAMBÉM ACIONA O MECANISMO DE APRENDIZADO.
  * @param {Object} transacaoData Os dados da transação.
  * @param {string} usuario O nome do usuário que confirmou.
  * @param {string} chatId O ID do chat do Telegram.
@@ -676,39 +809,63 @@ function registrarTransacaoConfirmada(transacaoData, usuario, chatId) {
       return;
     }
     
-    // Adiciona a(s) nova(s) linha(s) na aba de transações (lógica existente)
-    // ... (a lógica de criar as linhas da transação continua a mesma de antes) ...
     const rowsToAdd = [];
     const timezone = ss.getSpreadsheetTimeZone();
 
     if (transacaoData.tipo === "Transferência") {
-        // ... (lógica de transferência existente) ...
         const dataFormatada = `'${Utilities.formatDate(new Date(transacaoData.data), timezone, "dd/MM/yyyy")}`;
         const dataRegistroFormatada = `'${Utilities.formatDate(new Date(), timezone, "dd/MM/yyyy HH:mm:ss")}`;
 
+        // Transação 1: Saída da conta de origem
         rowsToAdd.push([
-            dataFormatada, `Transferência para ${transacaoData.contaDestino}`, "🔄 Transferências", "Entre Contas", 
-            "Despesa", transacaoData.valor, "Transferência", transacaoData.contaOrigem, 1, 1, 
-            dataFormatada, usuario, "Ativo", `${transacaoData.finalId}-1`, dataRegistroFormatada
+            dataFormatada,
+            `Transferência para ${transacaoData.contaDestino}`,
+            "🔄 Transferências",
+            "Entre Contas",
+            "Despesa",
+            transacaoData.valor,
+            "Transferência",
+            transacaoData.contaOrigem,
+            1, 1, dataFormatada,
+            usuario,
+            "Ativo", `${transacaoData.finalId}-1`, dataRegistroFormatada
         ]);
+
+        // Transação 2: Entrada na conta de destino
         rowsToAdd.push([
-            dataFormatada, `Transferência de ${transacaoData.contaOrigem}`, "🔄 Transferências", "Entre Contas",
-            "Receita", transacaoData.valor, "Transferência", transacaoData.contaDestino, 1, 1,
-            dataFormatada, usuario, "Ativo", `${transacaoData.finalId}-2`, dataRegistroFormatada
+            dataFormatada,
+            `Transferência de ${transacaoData.contaOrigem}`,
+            "🔄 Transferências",
+            "Entre Contas",
+            "Receita",
+            transacaoData.valor,
+            "Transferência",
+            transacaoData.contaDestino,
+            1, 1, dataFormatada,
+            usuario,
+            "Ativo", `${transacaoData.finalId}-2`, dataRegistroFormatada
         ]);
         
-        // Adiciona as linhas na planilha
         if (rowsToAdd.length > 0) {
             transacoesSheet.getRange(transacoesSheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
         }
         
-        // CHAMA A NOVA FUNÇÃO DE AJUSTE INCREMENTAL PARA TRANSFERÊNCIA
-        ajustarSaldoIncrementalmente(contasSheet, transacaoData.contaOrigem, -transacaoData.valor, transacaoData.contaDestino, transacaoData.valor);
-
+        // --- INÍCIO DA MELHORIA: Lógica de Transferência para Cartão ---
+        const contasSheetData = contasSheet.getDataRange().getValues();
+        const infoContaDestino = obterInformacoesDaConta(transacaoData.contaDestino, contasSheetData);
+        
+        let valorAjusteDestino = transacaoData.valor;
+        // Se a conta de destino for um cartão de crédito, o valor da transferência (pagamento) deve REDUZIR a dívida.
+        if (infoContaDestino && normalizarTexto(infoContaDestino.tipo) === "cartao de credito") {
+            valorAjusteDestino = -transacaoData.valor;
+            logToSheet(`Ajuste de transferência para cartão de crédito detectado. Valor de ajuste para destino: ${valorAjusteDestino}`, "INFO");
+        }
+        
+        ajustarSaldoIncrementalmente(contasSheet, transacaoData.contaOrigem, -transacaoData.valor, transacaoData.contaDestino, valorAjusteDestino);
+        // --- FIM DA MELHORIA ---
         enviarMensagemTelegram(chatId, `✅ Transferência de *${formatCurrency(transacaoData.valor)}* registrada com sucesso!`);
 
     } else { // Despesa ou Receita
-        // ... (lógica de despesa/receita existente) ...
         const valorParcela = transacaoData.valor / transacaoData.parcelasTotais;
         const dataVencimentoBase = new Date(transacaoData.dataVencimento);
         const dataTransacaoBase = new Date(transacaoData.data);
@@ -717,10 +874,11 @@ function registrarTransacaoConfirmada(transacaoData, usuario, chatId) {
         const dataRegistroFormatada = `'${Utilities.formatDate(dataRegistroBase, timezone, "dd/MM/yyyy HH:mm:ss")}`;
 
         for (let i = 0; i < transacaoData.parcelasTotais; i++) {
-            // ... (lógica de cálculo de parcelas existente) ...
             let dataVencimentoParcela = new Date(dataVencimentoBase);
             dataVencimentoParcela.setMonth(dataVencimentoBase.getMonth() + i);
-            // ... (restante da lógica de parcelas) ...
+            if (dataVencimentoParcela.getDate() !== dataVencimentoBase.getDate()) {
+                dataVencimentoParcela = new Date(dataVencimentoParcela.getFullYear(), dataVencimentoParcela.getMonth() + 1, 0);
+            }
             rowsToAdd.push([
               dataTransacaoFormatada, transacaoData.descricao, transacaoData.categoria, transacaoData.subcategoria,
               transacaoData.tipo, valorParcela, transacaoData.metodoPagamento, transacaoData.conta,
@@ -728,25 +886,51 @@ function registrarTransacaoConfirmada(transacaoData, usuario, chatId) {
             ]);
         }
         
-        // Adiciona as linhas na planilha
         if (rowsToAdd.length > 0) {
             transacoesSheet.getRange(transacoesSheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
         }
 
-        // CHAMA A NOVA FUNÇÃO DE AJUSTE INCREMENTAL PARA DESPESA/RECEITA
+        // --- INÍCIO DA MELHORIA: Lógica de Ajuste Incremental Unificada ---
         const infoConta = obterInformacoesDaConta(transacaoData.conta, contasSheet.getDataRange().getValues());
-        if (infoConta && infoConta.tipo !== "cartão de crédito") {
-            const valorAjuste = transacaoData.tipo === 'Receita' ? transacaoData.valor : -transacaoData.valor;
+        if (infoConta) {
+          let valorAjuste;
+          
+          if (normalizarTexto(infoConta.tipo) === "cartao de credito") {
+            // Para cartões de crédito, despesas aumentam a dívida (saldo pendente).
+            // Receitas (estornos) diminuem a dívida.
+            valorAjuste = transacaoData.tipo === 'Receita' ? -transacaoData.valor : transacaoData.valor;
+            
+            // A dívida total é adicionada de uma vez, independentemente das parcelas.
             ajustarSaldoIncrementalmente(contasSheet, transacaoData.conta, valorAjuste);
+            logToSheet(`Ajuste incremental de DÍVIDA aplicado para '${transacaoData.conta}'. Valor: ${valorAjuste}`, "INFO");
+          
+          } else {
+            // Para contas normais (débito, dinheiro), o valor total da transação impacta o saldo.
+            valorAjuste = transacaoData.tipo === 'Receita' ? transacaoData.valor : -transacaoData.valor;
+            ajustarSaldoIncrementalmente(contasSheet, transacaoData.conta, valorAjuste);
+            logToSheet(`Ajuste incremental de SALDO aplicado para '${transacaoData.conta}'. Valor: ${valorAjuste}`, "INFO");
+          }
         } else {
-            // Para cartões de crédito, o saldo não muda imediatamente, então apenas atualizamos o orçamento.
-            logToSheet(`Ajuste incremental de saldo não aplicado para '${transacaoData.conta}' (Cartão de Crédito).`, "INFO");
+            logToSheet(`AVISO: Conta '${transacaoData.conta}' não encontrada para ajuste de saldo incremental.`, "WARN");
         }
+        // --- FIM DA MELHORIA ---
         
         enviarMensagemTelegram(chatId, `✅ Lançamento de *${formatCurrency(transacaoData.valor)}* (${transacaoData.parcelasTotais}x) registrado com sucesso!`);
+        
+        // =================================================================
+        // ### INÍCIO DA NOVA LÓGICA DE APRENDIZADO ###
+        // =================================================================
+        // Se a transação foi originalmente classificada como "Não Identificada",
+        // significa que o usuário a corrigiu através do assistente.
+        if (transacaoData.originalCategory === "Não Identificada") {
+            logToSheet(`[Learning] Gatilho de aprendizado acionado a partir do assistente para a descrição: "${transacaoData.descricao}"`, "INFO");
+            learnFromCorrection(transacaoData.descricao, transacaoData.categoria, transacaoData.subcategoria);
+        }
+        // =================================================================
+        // ### FIM DA NOVA LÓGICA DE APRENDIZADO ###
+        // =================================================================
     }
     
-    // A chamada para a função de orçamento pode ser mantida, pois ela já é otimizada.
     updateBudgetSpentValues();
 
   } catch (e) {
@@ -1588,3 +1772,49 @@ function getSaudeFinanceira(chatId) {
 
     return mensagem;
 }
+
+
+/**
+ * @private
+ * Procura por uma categoria aprendida com base na descrição da transação.
+ * Esta função consulta a "memória" do bot na aba 'LearnedCategories'.
+ * @param {string} textoNormalizado A descrição normalizada da transação.
+ * @returns {Object|null} Objeto com { categoria, subcategoria } se encontrar uma correspondência de alta confiança, ou null.
+ */
+function findLearnedCategory(textoNormalizado) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const learnedSheet = ss.getSheetByName(SHEET_LEARNED_CATEGORIES);
+    if (!learnedSheet) return null; // Se a aba não existe, não há nada a aprender
+
+    const data = learnedSheet.getDataRange().getValues();
+    if (data.length < 2) return null; // Se a aba está vazia (só cabeçalho)
+
+    const headers = data[0];
+    const colMap = getColumnMap(headers);
+
+    let bestMatch = null;
+    // A confiança mínima para aplicar a regra automaticamente
+    let highestScore = MIN_CONFIDENCE_TO_APPLY - 1; 
+
+    // Itera por todas as regras aprendidas
+    for (let i = 1; i < data.length; i++) {
+        const keyword = data[i][colMap['Keyword']];
+        const score = parseInt(data[i][colMap['ConfidenceScore']]) || 0;
+
+        // Se a descrição contém a palavra-chave e a confiança é alta o suficiente
+        if (textoNormalizado.includes(keyword) && score > highestScore) {
+            highestScore = score;
+            bestMatch = {
+                categoria: data[i][colMap['Categoria']],
+                subcategoria: data[i][colMap['Subcategoria']],
+                keyword: keyword // Retorna a keyword que deu o match
+            };
+        }
+    }
+    
+    if (bestMatch) {
+        logToSheet(`[Learning] Categoria aprendida encontrada via keyword '${bestMatch.keyword}': ${bestMatch.categoria} > ${bestMatch.subcategoria}`, "INFO");
+    }
+    return bestMatch;
+}
+
