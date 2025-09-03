@@ -10,8 +10,6 @@
  */
 function checkAndSendNotifications() {
   logToSheet("Iniciando verificação e envio de notificações proativas.", "INFO");
-
-  // A função getNotificationConfig carrega as configurações da SHEET_NOTIFICACOES_CONFIG
   const notificationConfig = getNotificationConfig(); 
 
   if (!notificationConfig) {
@@ -19,26 +17,69 @@ function checkAndSendNotifications() {
     return;
   }
 
-  // Envia notificações para cada usuário/grupo configurado
   for (const chatId in notificationConfig) {
     const userConfig = notificationConfig[chatId];
-    logToSheet(`Verificando configurações de notificação para Chat ID: ${chatId} (Usuário: ${userConfig.usuario})`, "DEBUG");
+    logToSheet(`Verificando notificações para Chat ID: ${chatId} (Usuário: ${userConfig.usuario})`, "DEBUG");
 
-    if (userConfig.enableBudgetAlerts) {
-      sendBudgetAlerts(chatId, userConfig.usuario);
-    }
-    if (userConfig.enableBillReminders) {
-      sendUpcomingBillReminders(chatId, userConfig.usuario);
-    }
-    if (userConfig.enableDailySummary && isTimeForDailySummary(userConfig.dailySummaryTime)) {
-      sendDailySummary(chatId, userConfig.usuario);
-    }
+    if (userConfig.enableBudgetAlerts) sendBudgetAlerts(chatId, userConfig.usuario);
+    if (userConfig.enableBillReminders) sendUpcomingBillReminders(chatId, userConfig.usuario);
+    if (userConfig.enableDailySummary && isTimeForDailySummary(userConfig.dailySummaryTime)) sendDailySummary(chatId, userConfig.usuario);
+    // ATUALIZADO: A lógica semanal agora chama a nova função de insights
     if (userConfig.enableWeeklySummary && isTimeForWeeklySummary(userConfig.weeklySummaryDay, userConfig.weeklySummaryTime)) {
-      sendWeeklySummary(chatId, userConfig.usuario);
+      generateAndSendWeeklyInsight(chatId, userConfig.usuario);
     }
   }
-
   logToSheet("Verificação e envio de notificações concluídos.", "INFO");
+}
+
+/**
+ * **FUNÇÃO TOTALMENTE REESTRUTURADA**
+ * Gera múltiplos insights sobre os gastos da última semana e envia os mais relevantes.
+ * @param {string} chatId O ID do chat para enviar o insight.
+ * @param {string} usuario O nome do utilizador para filtrar as transações.
+ */
+function generateAndSendWeeklyInsight(chatId, usuario) {
+  logToSheet(`[Insight Semanal] Iniciando geração para ${usuario} (${chatId}).`, "INFO");
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+  if (!transacoesSheet) {
+    logToSheet("[Insight Semanal] Aba 'Transacoes' não encontrada.", "ERROR");
+    return;
+  }
+  const transacoes = transacoesSheet.getDataRange().getValues();
+
+  // 1. Gera uma lista de possíveis insights
+  const potentialInsights = [];
+  potentialInsights.push(_findTopSpendingCategory(usuario, transacoes));
+  potentialInsights.push(_findBiggestSpendingIncrease(usuario, transacoes));
+  potentialInsights.push(_detectNewRecurringExpenses(usuario, transacoes));
+
+  // 2. Filtra os insights que foram gerados com sucesso (não nulos) e ordena por prioridade
+  const validInsights = potentialInsights.filter(Boolean).sort((a, b) => (a.priority || 99) - (b.priority || 99));
+
+  if (validInsights.length === 0) {
+    logToSheet(`[Insight Semanal] Nenhum insight relevante gerado para ${usuario}.`, "INFO");
+    return;
+  }
+
+  // 3. Constrói a mensagem final com os insights mais importantes
+  const nomeFormatado = escapeMarkdown(usuario.split(' ')[0]);
+  let mensagem = `💡 *Seu Insight Semanal do Gasto Certo*\n\n` +
+                 `Olá, ${nomeFormatado}! Aqui está a sua análise da semana que passou:\n\n`;
+
+  // Adiciona o primeiro (e mais importante) insight
+  mensagem += `*${validInsights[0].title}*\n${validInsights[0].text}\n\n`;
+
+  // Se houver um segundo insight relevante, adiciona-o também
+  if (validInsights.length > 1) {
+    mensagem += `*${validInsights[1].title}*\n${validInsights[1].text}\n\n`;
+  }
+  
+  mensagem += `_Continue a registar para receber mais insights!_ 🚀`;
+
+  enviarMensagemTelegram(chatId, mensagem);
+  logToSheet(`[Insight Semanal] Mensagem com ${validInsights.length} insights enviada para ${usuario}.`, "INFO");
 }
 
 /**
@@ -422,39 +463,7 @@ function getNotificationConfig() {
 }
 
 
-/**
- * ANALISA OS GASTOS DA ÚLTIMA SEMANA E ENVIA UM INSIGHT INTELIGENTE E PERSONALIZADO.
- * Esta função foi projetada para ser executada por um gatilho semanal (ex: todos os domingos).
- */
-function enviarInsightSemanal() {
-  logToSheet("Iniciando geração de Insights Semanais.", "INFO");
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
-  const configSheet = ss.getSheetByName(SHEET_CONFIGURACOES);
-
-  if (!transacoesSheet || !configSheet) {
-    logToSheet("Aba 'Transacoes' ou 'Configuracoes' não encontrada para Insight Semanal.", "ERROR");
-    return;
-  }
-
-  const transacoes = transacoesSheet.getDataRange().getValues();
-  const config = configSheet.getDataRange().getValues();
-
-  // Obter todos os usuários configurados
-  const usuarios = config.filter(row => row[0] === 'chatId').map(row => ({
-    chatId: row[1],
-    nome: row[2]
-  }));
-
-  // Para cada usuário, gerar e enviar o insight
-  usuarios.forEach(usuario => {
-    gerarEEnviarInsightParaUsuario(usuario, transacoes);
-    Utilities.sleep(1000); // Pausa para evitar limites de taxa do Telegram
-  });
-
-  logToSheet("Geração de Insights Semanais concluída.", "INFO");
-}
 
 /**
  * Função auxiliar que gera e envia o insight para um único usuário.
@@ -586,3 +595,169 @@ function gerarEEnviarInsightParaUsuario(usuario, transacoes) {
   logToSheet(`Insight Semanal enviado com sucesso para ${nome} (${chatId}).`, "INFO");
 }
 
+// ===================================================================================
+// ##      NOVAS FUNÇÕES AUXILIARES PARA GERAR INSIGHTS                            ##
+// ===================================================================================
+
+/**
+ * @private
+ * Encontra a categoria com o maior gasto absoluto na última semana.
+ * @returns {object|null} Um objeto de insight ou null.
+ */
+function _findTopSpendingCategory(usuario, transacoes) {
+  const { inicioDaSemana, fimDaSemana } = _getLastWeekDateRange();
+  const gastosSemana = {};
+
+  for (let i = 1; i < transacoes.length; i++) {
+    const linha = transacoes[i];
+    const dataTransacao = parseData(linha[0]);
+    if (dataTransacao >= inicioDaSemana && dataTransacao <= fimDaSemana && normalizarTexto(linha[11]) === normalizarTexto(usuario)) {
+      const tipo = (linha[4] || "").toLowerCase();
+      const categoria = linha[2];
+      const valor = parseBrazilianFloat(String(linha[5]));
+      if (tipo === "despesa" && categoria && categoria.trim() !== "🔄 Transferências") {
+        gastosSemana[categoria] = (gastosSemana[categoria] || 0) + valor;
+      }
+    }
+  }
+
+  if (Object.keys(gastosSemana).length === 0) return null;
+
+  const categoriaMaiorGasto = Object.keys(gastosSemana).reduce((a, b) => gastosSemana[a] > gastosSemana[b] ? a : b);
+  const valorMaiorGasto = gastosSemana[categoriaMaiorGasto];
+
+  return {
+    priority: 2, // Prioridade média
+    title: "🥇 Seu Maior Gasto Semanal",
+    text: `A sua maior despesa foi com *${escapeMarkdown(categoriaMaiorGasto)}*, totalizando *${formatCurrency(valorMaiorGasto)}*.`
+  };
+}
+
+/**
+ * @private
+ * Encontra a categoria que teve o maior aumento percentual em relação à média histórica.
+ * @returns {object|null} Um objeto de insight ou null.
+ */
+function _findBiggestSpendingIncrease(usuario, transacoes) {
+  const { inicioDaSemana, fimDaSemana } = _getLastWeekDateRange();
+  const gastosSemana = {};
+
+  // Calcula gastos da última semana por categoria
+  for (let i = 1; i < transacoes.length; i++) {
+      const linha = transacoes[i];
+      const dataTransacao = parseData(linha[0]);
+      if (dataTransacao >= inicioDaSemana && dataTransacao <= fimDaSemana && normalizarTexto(linha[11]) === normalizarTexto(usuario) && (linha[4] || "").toLowerCase() === "despesa") {
+          const categoria = linha[2];
+          const valor = parseBrazilianFloat(String(linha[5]));
+          if(categoria && categoria.trim() !== "🔄 Transferências") gastosSemana[categoria] = (gastosSemana[categoria] || 0) + valor;
+      }
+  }
+
+  const inicioHistorico = new Date(inicioDaSemana);
+  inicioHistorico.setDate(inicioDaSemana.getDate() - (8 * 7)); // 8 semanas de histórico
+
+  let categoriaMaiorVariacao = null;
+  let maiorVariacao = 25; // Apenas considera variações acima de 25%
+
+  for (const categoria in gastosSemana) {
+      let gastoHistorico = 0;
+      let semanasComGasto = new Set();
+      for (let i = 1; i < transacoes.length; i++) {
+          const linha = transacoes[i];
+          const dataTransacao = parseData(linha[0]);
+          if (dataTransacao >= inicioHistorico && dataTransacao < inicioDaSemana && linha[2] === categoria && normalizarTexto(linha[11]) === normalizarTexto(usuario) && (linha[4] || "").toLowerCase() === "despesa") {
+              gastoHistorico += parseBrazilianFloat(String(linha[5]));
+              semanasComGasto.add(Utilities.formatDate(dataTransacao, Session.getScriptTimeZone(), "w-YYYY"));
+          }
+      }
+
+      if(gastoHistorico > 0) {
+        const mediaSemanal = gastoHistorico / (semanasComGasto.size || 1);
+        const variacao = ((gastosSemana[categoria] - mediaSemanal) / mediaSemanal) * 100;
+        if (variacao > maiorVariacao) {
+          maiorVariacao = variacao;
+          categoriaMaiorVariacao = {
+            nome: categoria,
+            variacao: variacao,
+            gastoAtual: gastosSemana[categoria],
+            media: mediaSemanal
+          };
+        }
+      }
+  }
+
+  if (categoriaMaiorVariacao) {
+    return {
+      priority: 1, // Prioridade alta
+      title: "👀 Destaque da Semana",
+      text: `Os seus gastos com *${escapeMarkdown(categoriaMaiorVariacao.nome)}* aumentaram *${categoriaMaiorVariacao.variacao.toFixed(0)}%* em relação à sua média semanal (de ${formatCurrency(categoriaMaiorVariacao.media)} para ${formatCurrency(categoriaMaiorVariacao.gastoAtual)}).`
+    };
+  }
+
+  return null;
+}
+
+
+/**
+ * @private
+ * Deteta novas despesas recorrentes (potenciais assinaturas) nos últimos 30 dias.
+ * @returns {object|null} Um objeto de insight ou null.
+ */
+function _detectNewRecurringExpenses(usuario, transacoes) {
+  const hoje = new Date();
+  const inicioPeriodoRecente = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 30);
+  const inicioPeriodoAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 60);
+
+  const gastosRecentes = {};
+  const gastosAnteriores = {};
+
+  for (let i = 1; i < transacoes.length; i++) {
+    const linha = transacoes[i];
+    const dataTransacao = parseData(linha[0]);
+    if (dataTransacao >= inicioPeriodoAnterior && normalizarTexto(linha[11]) === normalizarTexto(usuario) && (linha[4] || "").toLowerCase() === "despesa") {
+      const descricao = normalizarTexto(linha[1]);
+      if (dataTransacao >= inicioPeriodoRecente) {
+        gastosRecentes[descricao] = (gastosRecentes[descricao] || 0) + 1;
+      } else {
+        gastosAnteriores[descricao] = (gastosAnteriores[descricao] || 0) + 1;
+      }
+    }
+  }
+
+  const novasAssinaturas = [];
+  for (const desc in gastosRecentes) {
+    if (gastosRecentes[desc] >= 2 && !gastosAnteriores[desc]) {
+      novasAssinaturas.push(capitalize(desc));
+    }
+  }
+
+  if (novasAssinaturas.length > 0) {
+    return {
+      priority: 0, // Prioridade máxima
+      title: "🧐 Nova Despesa Recorrente?",
+      text: `Notámos novos gastos recorrentes com: *${escapeMarkdown(novasAssinaturas.join(', '))}*. Trata-se de uma nova assinatura?`
+    };
+  }
+  
+  return null;
+}
+
+
+/**
+ * @private
+ * Retorna o intervalo de datas para a última semana completa (Domingo a Sábado).
+ * @returns {object} Um objeto com as datas { inicioDaSemana, fimDaSemana }.
+ */
+function _getLastWeekDateRange() {
+  const hoje = new Date();
+  const diaDaSemana = hoje.getDay(); // 0=Dom, 6=Sáb
+  const fimDaSemana = new Date(hoje);
+  fimDaSemana.setDate(hoje.getDate() - diaDaSemana - 1); // Último sábado
+  fimDaSemana.setHours(23, 59, 59, 999);
+  
+  const inicioDaSemana = new Date(fimDaSemana);
+  inicioDaSemana.setDate(fimDaSemana.getDate() - 6); // Último domingo
+  inicioDaSemana.setHours(0, 0, 0, 0);
+
+  return { inicioDaSemana, fimDaSemana };
+}
