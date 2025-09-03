@@ -5,7 +5,9 @@
  */
 
 /**
+ * **VERSÃO FINAL E OTIMIZADA**
  * Processa uma mensagem de voz recebida do Telegram.
+ * Agora utiliza a função centralizada `handleError` para uma gestão de erros consistente.
  * @param {Object} message O objeto de mensagem do Telegram contendo os dados da voz.
  */
 function handleVoiceMessage(message) {
@@ -28,31 +30,29 @@ function handleVoiceMessage(message) {
       return;
     }
 
-    // **CORREÇÃO:** O nome da função foi corrigido de `transcribeAudio` para `transcreverAudio`.
     const textoTranscrito = transcreverAudio(audioBlob);
     if (!textoTranscrito) {
       enviarMensagemTelegram(chatId, "❌ Desculpe, não consegui entender o que você disse. Pode tentar digitar?");
       return;
     }
 
-    // Passo 3: Processar o texto transcrito como se fosse uma mensagem de texto normal
     enviarMensagemTelegram(chatId, `Você disse: "_${escapeMarkdown(textoTranscrito)}_"`, { parse_mode: 'Markdown' });
     
     const configData = getSheetDataWithCache(SHEET_CONFIGURACOES, CACHE_KEY_CONFIG);
     const usuario = getUsuarioPorChatId(chatId, configData);
 
+    // Passo 3: Processa o texto transcrito como se fosse uma mensagem normal
     const resultado = interpretarMensagemTelegram(textoTranscrito, usuario, chatId);
 
     if (resultado && resultado.errorMessage) {
       enviarMensagemTelegram(chatId, `❌ ${resultado.errorMessage}`);
-    } else if (!resultado || (!resultado.status && !resultado.message)) {
-      enviarMensagemTelegram(chatId, "Não entendi o seu lançamento a partir do áudio. Tente ser mais claro ou digite /ajuda.");
+    } else if (!resultado || (!resultado.status && !resultado.message && !resultado.handled)) {
+       enviarMensagemTelegram(chatId, "Não entendi o seu lançamento a partir do áudio. Tente ser mais claro ou digite /ajuda.");
     }
   } catch (e) {
     const chatId = message?.chat?.id;
-    logToSheet(`Erro ao processar mensagem de voz: ${e.message}`, "ERROR");
-    if (chatId) {
-      enviarMensagemTelegram(chatId, "❌ Ocorreu um erro inesperado ao processar sua mensagem de voz. O administrador foi notificado.");
-    }
+    // Utiliza a função de erro centralizada para consistência
+    handleError(e, "handleVoiceMessage", chatId);
   }
 }
+
