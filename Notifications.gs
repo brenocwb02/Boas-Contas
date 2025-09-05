@@ -118,6 +118,83 @@ function isTimeForWeeklySummary(dayOfWeek, timeString) {
   return currentDay === dayOfWeek && currentHour === configHour && currentMinute >= configMinute && currentMinute < configMinute + 5;
 }
 
+/**
+ * NOVO: Verifica e envia alertas sobre fechamento e vencimento de faturas de cartão de crédito.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} usuario O nome do usuário.
+ */
+function sendCreditCardBillAlerts(chatId, usuario) {
+  try {
+    logToSheet(`[AlertasCartao] Iniciando verificação para ${usuario} (${chatId})`, "INFO");
+    atualizarSaldosDasContas(); // Garante que os saldos e faturas estão atualizados
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const contasSheet = ss.getSheetByName(SHEET_CONTAS);
+    const alertasSheet = ss.getSheetByName(SHEET_ALERTAS_ENVIADOS);
+    if (!contasSheet || !alertasSheet) {
+      logToSheet("[AlertasCartao] Aba 'Contas' ou 'AlertasEnviados' não encontrada.", "ERROR");
+      return;
+    }
+    
+    const dadosContas = contasSheet.getDataRange().getValues();
+    const alertasEnviados = alertasSheet.getDataRange().getValues();
+    const today = new Date();
+    const hoje = today.getDate();
+    const mesAtual = today.getMonth();
+    const anoAtual = today.getFullYear();
+
+    for (let i = 1; i < dadosContas.length; i++) {
+      const infoConta = obterInformacoesDaConta(dadosContas[i][0], dadosContas);
+      
+      if (infoConta && infoConta.tipo === 'cartão de crédito') {
+        const faturaAtual = globalThis.saldosCalculados[infoConta.nomeNormalizado]?.faturaAtual || 0;
+
+        // 1. Alerta de Fechamento da Fatura
+        if (infoConta.diaFechamento === hoje) {
+          const alertKey = `${chatId}|${infoConta.nomeNormalizado}|fechamento|${anoAtual}-${mesAtual}`;
+          if (faturaAtual > 0 && !_jaEnviado(alertKey, alertasEnviados)) {
+            const mensagem = `💳 *Alerta de Fatura Fechada*\n\nA fatura do seu cartão *${escapeMarkdown(infoConta.nomeOriginal)}* fechou hoje com o valor de *${formatCurrency(faturaAtual)}*.\n\nO vencimento é no dia *${infoConta.vencimento}*.`;
+            enviarMensagemTelegram(chatId, mensagem);
+            alertasSheet.appendRow([new Date(), chatId, alertKey]);
+          }
+        }
+
+        // 2. Lembrete de Vencimento da Fatura
+        const dataVencimento = new Date(anoAtual, mesAtual, infoConta.vencimento);
+        const diffTime = dataVencimento.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays >= 0 && diffDays <= BILL_REMINDER_DAYS_BEFORE) {
+           const alertKey = `${chatId}|${infoConta.nomeNormalizado}|vencimento|${anoAtual}-${mesAtual}`;
+           if (faturaAtual > 0 && !_jaEnviado(alertKey, alertasEnviados)) {
+             const mensagem = `🔔 *Lembrete de Vencimento*\n\nA fatura do seu cartão *${escapeMarkdown(infoConta.nomeOriginal)}* no valor de *${formatCurrency(faturaAtual)}* vence em *${diffDays} dia(s)*.`;
+             enviarMensagemTelegram(chatId, mensagem);
+             alertasSheet.appendRow([new Date(), chatId, alertKey]);
+           }
+        }
+      }
+    }
+  } catch (e) {
+    handleError(e, `sendCreditCardBillAlerts para ${usuario}`, chatId);
+  }
+}
+
+/**
+ * @private
+ * NOVO: Verifica se um alerta com uma chave específica já foi enviado.
+ * @param {string} key A chave única do alerta.
+ * @param {Array<Array<any>>} sentAlertsData Os dados da aba 'AlertasEnviados'.
+ * @returns {boolean} True se o alerta já foi enviado, false caso contrário.
+ */
+function _jaEnviado(key, sentAlertsData) {
+  for (let i = 1; i < sentAlertsData.length; i++) {
+    if (sentAlertsData[i][2] === key) {
+      return true;
+    }
+  }
+  return false;
+}
+
 
 /**
  * Envia alertas de orçamento excedido para o usuário.
@@ -760,4 +837,42 @@ function _getLastWeekDateRange() {
   inicioDaSemana.setHours(0, 0, 0, 0);
 
   return { inicioDaSemana, fimDaSemana };
+}
+
+
+/**
+ * @private
+ * Calcula o valor total de uma fatura de cartão para um mês/ano de vencimento específico.
+ * @param {string} cardName O nome do cartão.
+ * @param {number} targetMonth O mês de vencimento (0-11).
+ * @param {number} targetYear O ano de vencimento.
+ * @param {Array<Array<any>>} dadosTransacoes Os dados da aba de transações.
+ * @returns {number} O valor total da fatura.
+ */
+function _calculateBillForCard(cardName, targetMonth, targetYear, dadosTransacoes) {
+  let totalFatura = 0;
+  const cardNameNormalized = normalizarTexto(cardName);
+
+  for (let i = 1; i < dadosTransacoes.length; i++) {
+    const row = dadosTransacoes[i];
+    const tipo = (row[4] || "").toLowerCase();
+    const conta = normalizarTexto(row[7]);
+    const dataVencimento = parseData(row[10]);
+
+    if (
+      tipo === "despesa" &&
+      conta === cardNameNormalized &&
+      dataVencimento &&
+      dataVencimento.getMonth() === targetMonth &&
+      dataVencimento.getFullYear() === targetYear
+    ) {
+      // Exclui pagamentos de fatura para não abater no valor
+      const categoria = normalizarTexto(row[2]);
+      const subcategoria = normalizarTexto(row[3]);
+      if (!(categoria === "contas a pagar" && subcategoria === "pagamento de fatura")) {
+        totalFatura += parseBrazilianFloat(String(row[5]));
+      }
+    }
+  }
+  return round(totalFatura, 2);
 }
