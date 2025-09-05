@@ -104,7 +104,7 @@ const HEADERS = {
   [SHEET_METAS]: ["Categoria", "Subcategoria", "janeiro/2025", "Total Geral"], // Exemplo, ajuste conforme sua planilha
   [SHEET_FATURAS]: ["ID Fatura", "Cartao", "Mes Referencia", "Data Fechamento", "Data Vencimento", "Valor Total", "Valor Pago", "Status", "ID Transacao Pagamento"], // Seus cabeçalhos podem variar
   [SHEET_ORCAMENTO]: ["ID Orcamento", "Mes referencia", "Categoria", "Valor Orcado", "Valor Gasto"], // Seus cabeçalhos podem variar
-  [SHEET_NOTIFICACOES_CONFIG]: ["Chat ID", "Usuário", "Alertas Orçamento", "Lembretes Contas a Pagar", "Resumo Diário", "Hora Resumo Diário (HH:mm)", "Resumo Semanal", "Dia Resumo Semanal (0-6)", "Hora Resumo Semanal (HH:mm)"],
+  [SHEET_NOTIFICACOES_CONFIG]: ["Chat ID", "Usuário", "Alertas Orçamento", "Lembretes Contas a Pagar", "Resumo Diário", "Hora Resumo Diário (HH:mm)", "Resumo Semanal", "Dia Resumo Semanal (0-6)", "Hora Resumo Semanal (HH:mm)","Alertas de Fatura"],
   [SHEET_PALAVRAS_CHAVE]: ["Tipo da Palavra-Chave", "Palavra-Chave", "Valor Interpretado"], // Seus cabeçalhos podem variar
   [SHEET_LEARNED_CATEGORIES]: ["Keyword", "Categoria", "Subcategoria", "ConfidenceScore", "LastUpdated"]
 };
