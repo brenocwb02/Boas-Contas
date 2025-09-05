@@ -959,10 +959,9 @@ function getDashboardLayout() {
       return savedLayout;
     } else {
       // Se o usuário nunca salvou um layout, retorna uma configuração padrão.
-      // Os IDs aqui devem corresponder aos IDs das seções no HTML.
+      // Os IDs aqui devem corresponder aos IDs dos cards no HTML.
       const defaultLayout = {
-        order: ["summary-grid-section", "account-balances-section", "main-grid-section"],
-        hidden: []
+        hiddenCards: [] // Agora focado em cards individuais
       };
       Logger.log('Nenhum layout encontrado. Usando o padrão.');
       return JSON.stringify(defaultLayout);
@@ -971,8 +970,7 @@ function getDashboardLayout() {
     Logger.log('Erro ao recuperar o layout: ' + e.toString());
     // Em caso de erro, retorna o layout padrão para não quebrar a interface.
     const defaultLayout = {
-        order: ["summary-grid-section", "account-balances-section", "main-grid-section"],
-        hidden: []
+        hiddenCards: []
     };
     return JSON.stringify(defaultLayout);
   }
