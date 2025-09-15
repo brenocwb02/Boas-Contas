@@ -458,6 +458,23 @@ function _getExpensesByCategoryChartData(dadosTransacoes, currentMonth, currentY
     }));
 }
 
+/**
+ * @private
+ * NOVO: Busca os dados históricos do valor da carteira de investimentos.
+ * @returns {Array<Object>} Um array com objetos { data, valor }.
+ */
+function _getPortfolioHistoryData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const historySheet = ss.getSheetByName("PortfolioHistory"); // Usa a constante
+  if (!historySheet || historySheet.getLastRow() < 2) {
+    return [];
+  }
+  const data = historySheet.getRange("A2:B" + historySheet.getLastRow()).getValues();
+  return data.map(row => ({
+    date: new Date(row[0]).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+    value: parseFloat(row[1]) || 0
+  }));
+}
 
 /**
  * **VERSÃO REDESENHADA E ORGANIZADA**
@@ -502,6 +519,7 @@ function getDashboardData(mes, ano) {
   const expensesByCategoryArray = _getExpensesByCategoryChartData(dadosTransacoes, currentMonth, currentYear, categoryIconsMap);
   const netWorthData = calculateNetWorth(); // <-- ADICIONADO
   const investmentData = _getInvestmentsData(); // <-- ADICIONADO
+  const portfolioHistory = _getPortfolioHistoryData(); // <-- ADICIONADO
   
   const categoriasMap = getCategoriesMap();
   const needsWantsSummary = _getNeedsWantsSummary(dadosTransacoes, categoriasMap, currentMonth, currentYear);
@@ -520,6 +538,7 @@ function getDashboardData(mes, ano) {
     needsWantsSummary: needsWantsSummary,
     netWorth: netWorthData,
     investments: investmentData, // <-- ADICIONADO
+    portfolioHistory: portfolioHistory, // <-- ADICIONADO
     accounts: getAccountsForDropdown(dadosContas),
     categories: getCategoriesForDropdown(dadosCategorias),
     paymentMethods: getPaymentMethodsForDropdown()
