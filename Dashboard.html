@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Financeiro</title>
+    <title>Dashboard Financeiro - Zaq</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -245,8 +245,14 @@
         <!-- Sidebar -->
         <nav class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h2>Boas Contas</h2>
-                <p>Menu</p>
+                 <!-- LOGO E NOME ATUALIZADOS -->
+                <div class="flex items-center justify-center gap-3 mb-2">
+                    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-green-400 rounded-xl flex items-center justify-center shadow-lg">
+                        <i class="fas fa-play text-2xl text-white -mr-1"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white">Zaq</h2>
+                </div>
+                <p class="text-sm text-gray-400">O seu agente financeiro</p>
             </div>
             <ul class="sidebar-nav">
                 <li><a id="show-dashboard-view" class="active"><i class="fas fa-tachometer-alt"></i> <span>Visão Geral</span></a></li>
@@ -357,6 +363,26 @@
                         <div class="main-grid">
                             <div class="left-column">
                                 <div class="card" id="card-despesas-categoria"><div class="card-header"><div class="card-icon" style="background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal));"><i class="fas fa-chart-bar"></i></div><div class="card-title">Despesas por Categoria</div></div><div class="card-content"><div class="chart-container"><canvas id="expenses-chart"></canvas></div><div id="expenses-chart-empty" class="empty-state" style="display: none;"><i class="fas fa-chart-bar"></i><div>Nenhum dado de despesas para o gráfico.</div></div></div></div>
+                                <!-- NOVO CARD: EVOLUÇÃO DA CARTEIRA -->
+                                <div class="card" id="card-evolucao-carteira">
+                                    <div class="card-header">
+                                        <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));">
+                                            <i class="fas fa-chart-area"></i>
+                                        </div>
+                                        <div class="card-title">Evolução da Carteira</div>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="chart-container" style="height: 300px;">
+                                            <canvas id="portfolio-evolution-chart"></canvas>
+                                        </div>
+                                        <div id="portfolio-evolution-empty" class="empty-state" style="display: none;">
+                                            <i class="fas fa-history"></i>
+                                            <div>Ainda não há histórico suficiente para gerar o gráfico.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                                         
+                                
                                 <div class="card" id="card-investimentos">
                                     <div class="card-header">
                                         <div class="card-icon" style="background: linear-gradient(135deg, var(--accent-green), #6EE7B7);">
@@ -566,6 +592,7 @@
         let expensesChartInstance = null;
         let budgetChartInstance = null;
         let needsWantsChartInstance = null;
+        let portfolioEvolutionChartInstance = null; 
         let calendarInstance = null;
         Chart.register(ChartDataLabels);
         let allAccounts = [];
@@ -690,7 +717,55 @@
             emptyState.style.display = 'none'; 
             const poupanca = Math.max(0, totalReceitas - (summary.necessidades + summary.desejos + summary.naoClassificado)); const chartData = { labels: ['Necessidades', 'Desejos', 'Poupança', 'Não Classificado'], datasets: [{ data: [summary.necessidades, summary.desejos, poupanca, summary.naoClassificado], backgroundColor: ['#3B82F6', '#8B5CF6', '#10B981', '#94A3B8'], borderColor: 'var(--bg-card)', borderWidth: 4, hoverOffset: 8 }] }; if (needsWantsChartInstance) needsWantsChartInstance.destroy(); needsWantsChartInstance = new Chart(chartCanvas, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: '#F8FAFC', font: { family: 'Inter', size: 12 }, padding: 20 } }, tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) label += ': '; const value = context.parsed; label += formatCurrency(value); if (totalReceitas > 0) { const percentage = ((value / totalReceitas) * 100).toFixed(1); label += ` (${percentage}%)`; } return label; } } }, datalabels: { display: false } } } }); 
         }
+        
+        function renderPortfolioEvolutionChart(history) {
+            const chartCanvas = document.getElementById('portfolio-evolution-chart');
+            const emptyState = document.getElementById('portfolio-evolution-empty');
+            const chartContainer = document.getElementById('card-evolucao-carteira').querySelector('.chart-container');
 
+            if (!history || history.length < 2) {
+                if(portfolioEvolutionChartInstance) portfolioEvolutionChartInstance.destroy();
+                chartCanvas.style.display = 'none';
+                emptyState.style.display = 'flex';
+                return;
+            }
+            chartCanvas.style.display = 'block';
+            emptyState.style.display = 'none';
+
+            const labels = history.map(item => item.date);
+            const data = history.map(item => item.value);
+
+            const chartData = {
+                labels: labels,
+                datasets: [{
+                    label: 'Valor da Carteira',
+                    data: data,
+                    fill: true,
+                    backgroundColor: 'rgba(20, 184, 166, 0.2)',
+                    borderColor: 'rgba(20, 184, 166, 1)',
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointBackgroundColor: 'rgba(20, 184, 166, 1)'
+                }]
+            };
+
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: context => `Valor: ${formatCurrency(context.parsed.y)}` } }
+                },
+                scales: {
+                    x: { ticks: { color: '#CBD5E1', maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }, grid: { color: 'rgba(71, 85, 105, 0.1)' } },
+                    y: { ticks: { color: '#CBD5E1', callback: value => formatCurrency(value) }, grid: { color: 'rgba(71, 85, 105, 0.3)' } }
+                }
+            };
+            
+            if (portfolioEvolutionChartInstance) portfolioEvolutionChartInstance.destroy();
+            portfolioEvolutionChartInstance = new Chart(chartCanvas, { type: 'line', data: chartData, options: chartOptions });
+        }
+        
         function loadDashboardData() { showLoading(); const selectedMonth = parseInt(document.getElementById('month-select').value); const selectedYear = parseInt(document.getElementById('year-input').value); if (typeof google !== 'undefined' && google.script && google.script.run) { google.script.run .withSuccessHandler(function(data) { onSuccess(data, selectedMonth, selectedYear); }) .withFailureHandler(onFailure) .getDashboardData(selectedMonth + 1, selectedYear); } }
         
         function onSuccess(data, selectedMonth, selectedYear, newTransactionId = null) {
@@ -711,6 +786,7 @@
             renderExpenseChart(data.expensesByCategory);
             renderNeedsWantsChart(data.needsWantsSummary, data.summary.totalReceitas);
             renderInvestments(data.investments); 
+            renderPortfolioEvolutionChart(data.portfolioHistory);
             
             updateLastUpdateTime(selectedMonth, selectedYear);
             populateAccountsDropdown();
@@ -767,6 +843,9 @@
             { id: 'card-patrimonio', title: 'Patrimônio Líquido' },
             { id: 'card-contas', title: 'Minhas Contas' },
             { id: 'card-despesas-categoria', title: 'Gráfico de Despesas' },
+            // --- INÍCIO DA CORREÇÃO ---
+            { id: 'card-evolucao-carteira', title: 'Evolução da Carteira' },
+            // --- FIM DA CORREÇÃO ---
             { id: 'card-investimentos', title: 'Carteira de Investimentos' },
             { id: 'card-orcamento', title: 'Progresso do Orçamento' },
             { id: 'card-necessidades-desejos', title: 'Gráfico Necessidades vs. Desejos' },
