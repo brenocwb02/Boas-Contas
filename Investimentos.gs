@@ -159,7 +159,7 @@ function handleVenderAtivo(chatId, ticker, quantidade, preco, nomeContaDestino, 
     investimentosSheet.getRange(ativoRow, 3).setValue(novaQtd);
 
     if (novaQtd === 0) {
-        investimentosSheet.getRange(ativoRow, 9).setValue('Fechada'); // Coluna I: Status
+        investimentosSheet.getRange(ativoRow, 9).setValue('Fechada'); // Coluna J: Status
     }
 
     atualizarSaldosDasContas();
@@ -187,12 +187,15 @@ function _getInvestmentsData() {
     return [];
   }
 
-  const data = sheet.getRange("A2:I" + sheet.getLastRow()).getValues();
+  // --- INÍCIO DA CORREÇÃO ---
+  // A leitura dos dados agora vai até a coluna J (índice 9) para incluir a coluna "Status".
+  const data = sheet.getRange("A2:J" + sheet.getLastRow()).getValues();
   const investments = [];
 
   data.forEach(row => {
-    const ativo = row[0];
-    const status = row[8];
+    const ativo = row[0]; // Coluna A (índice 0)
+    // A coluna "Status" está na posição 9 do array (correspondente à coluna J)
+    const status = row[9]; 
 
     if (ativo && normalizarTexto(status) === 'aberta') {
       investments.push({
@@ -209,6 +212,7 @@ function _getInvestmentsData() {
   });
 
   return investments;
+  // --- FIM DA CORREÇÃO ---
 }
 
 /**
@@ -223,4 +227,105 @@ function getTotalInvestmentsValue() {
     const totalValue = investments.reduce((sum, asset) => sum + asset.valorAtual, 0);
     return totalValue;
 }
+
+
+// ===================================================================================
+// ### INÍCIO DA NOVA FUNÇÃO PARA REGISTAR PROVENTOS ###
+// ===================================================================================
+
+/**
+ * Regista um provento (dividendo, jcp, etc.), atualizando a planilha de investimentos e
+ * criando a transação de receita correspondente.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} ticker O código do ativo que pagou o provento.
+ * @param {number} valorProvento O valor total recebido.
+ * @param {string} nomeContaDestino O nome da conta/corretora onde o valor foi creditado.
+ * @param {string} usuario O nome do usuário.
+ */
+function registrarProvento(chatId, ticker, valorProvento, nomeContaDestino, usuario) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (!ticker || isNaN(valorProvento) || valorProvento <= 0 || !nomeContaDestino) {
+      enviarMensagemTelegram(chatId, "❌ Dados inválidos para registar o provento. Verifique o ticker, o valor e a conta de destino.");
+      return;
+    }
+
+    const tickerUpper = ticker.toUpperCase();
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const investimentosSheet = ss.getSheetByName(SHEET_INVESTIMENTOS);
+    const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
+
+    // Verifica se a conta de destino existe
+    const contaDestinoInfo = obterInformacoesDaConta(nomeContaDestino, dadosContas);
+    if (!contaDestinoInfo) {
+      enviarMensagemTelegram(chatId, `❌ Conta de destino "${escapeMarkdown(nomeContaDestino)}" não encontrada.`);
+      return;
+    }
+
+    // Encontra o ativo e a coluna de proventos
+    const dadosInvestimentos = investimentosSheet.getDataRange().getValues();
+    const headers = dadosInvestimentos[0];
+    const colTicker = headers.indexOf('Ativo');
+    const colProventos = headers.indexOf('Total de Proventos');
+
+    if (colProventos === -1) {
+        throw new Error("A coluna 'Total de Proventos' não foi encontrada na aba 'Investimentos'. Por favor, adicione-a.");
+    }
+
+    let ativoRow = -1;
+    for (let i = 1; i < dadosInvestimentos.length; i++) {
+        const tickerPlanilha = dadosInvestimentos[i][colTicker].toUpperCase().replace(".SA", "");
+        if (tickerPlanilha === tickerUpper) {
+            ativoRow = i + 1;
+            break;
+        }
+    }
+
+    if (ativoRow === -1) {
+        enviarMensagemTelegram(chatId, `❌ Ativo *${escapeMarkdown(tickerUpper)}* não encontrado na sua carteira. Registe primeiro uma compra para ele.`);
+        return;
+    }
+
+    // Atualiza o valor na coluna de proventos
+    const proventosRange = investimentosSheet.getRange(ativoRow, colProventos + 1);
+    const proventosAtuais = parseBrazilianFloat(String(proventosRange.getValue()));
+    proventosRange.setValue(proventosAtuais + valorProvento);
+
+    // Regista a transação de RECEITA
+    registrarTransacaoNaPlanilha(
+      new Date(),
+      `Proventos de ${tickerUpper}`,
+      '💸 Renda Extra e Investimentos',
+      'Proventos',
+      'Receita',
+      valorProvento,
+      'Transferência',
+      contaDestinoInfo.nomeOriginal,
+      1, 1, new Date(),
+      usuario,
+      'Ativo',
+      Utilities.getUuid(),
+      new Date()
+    );
+
+    // Ajusta o saldo da conta de destino
+    const contasSheet = ss.getSheetByName(SHEET_CONTAS);
+    ajustarSaldoIncrementalmente(contasSheet, contaDestinoInfo.nomeOriginal, valorProvento);
+
+    enviarMensagemTelegram(chatId, `✅ Provento de ${formatCurrency(valorProvento)} de *${escapeMarkdown(tickerUpper)}* registado com sucesso na conta ${contaDestinoInfo.nomeOriginal}!`);
+
+  } catch (e) {
+    handleError(e, "registrarProvento", chatId);
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
+}
+
+// ===================================================================================
+// ### FIM DA NOVA FUNÇÃO PARA REGISTAR PROVENTOS ###
+// ===================================================================================
 
