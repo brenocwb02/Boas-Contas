@@ -228,14 +228,14 @@ function solicitarInformacaoFaltante(campoFaltante, transacaoParcial, chatId) {
 
   switch (campoFaltante) {
     case "valor":
-      mensagem = `Ok, entendi. Mas não encontrei o valor. Qual o valor deste lançamento?`;
+      mensagem = `Sou eu, o Zaq! Entendi o lançamento, mas não encontrei o valor. Pode dizer-me qual foi, por favor?`;
       transacaoParcial.waitingFor = 'valor';
       setAssistantState(chatId, transacaoParcial);
       enviarMensagemTelegram(chatId, mensagem);
       break;
 
     case "conta":
-      mensagem = `Ok, entendi um(a) *${escapeMarkdown(transacaoParcial.tipo)}*. De qual conta ou cartão devo registrar?`;
+      mensagem = `Entendido! Para que este(a) *${escapeMarkdown(transacaoParcial.tipo)}* fique registado corretamente, de qual conta ou cartão devo usar?`;
       optionsList = dadosContas.slice(1).map(row => row[0]).filter(Boolean);
       optionsList.forEach((option, index) => {
         const button = { text: option, callback_data: `complete_conta_${transacaoParcial.id}_${index}` };
@@ -673,7 +673,7 @@ function prepararConfirmacaoSimples(transacaoData, chatId) {
   const cacheKey = `${CACHE_KEY_PENDING_TRANSACTIONS}_${chatId}_${transacaoData.finalId}`;
   cache.put(cacheKey, JSON.stringify(transacaoData), CACHE_EXPIRATION_PENDING_TRANSACTION_SECONDS);
 
-  let mensagem = `✅ Confirme seu Lançamento:\n\n`;
+  let mensagem = `✅ Entendido! Registado. Por favor, confirme se está tudo certo:\n\n`;
   mensagem += `*Tipo:* ${escapeMarkdown(transacaoData.tipo)}\n`;
   mensagem += `*Descricao:* ${escapeMarkdown(transacaoData.descricao)}\n`;
   mensagem += `*Valor:* ${formatCurrency(transacaoData.valor)}\n`;
@@ -716,7 +716,7 @@ function getNudgeMessage(chatId, transacao) {
 
   const perfil = perfilUsuario.perfil;
   let nudge = null;
-
+  let nudgeReason = '';
   // Lógica de gatilho para o perfil "Despreocupado"
   if (perfil === 'Despreocupado') {
     // Gatilho 1: Gasto alto em categorias de "Desejos"
@@ -745,6 +745,12 @@ function getNudgeMessage(chatId, transacao) {
 
   if (nudge) {
     logToSheet(`[Nudge Gerado] Perfil: ${perfil}, Categoria: ${transacao.categoria}, Valor: ${transacao.valor}. Mensagem: ${nudge}`, "INFO");
+  }
+  if (nudgeReason) {
+    const usuario = getUsuarioPorChatId(chatId, getSheetDataWithCache(SHEET_CONFIGURACOES, CACHE_KEY_CONFIG));
+    const nomeCurto = usuario.split(' ')[0];
+    nudge = `${nomeCurto}, sou eu, o Zac. Reparei neste gasto. Como seu agente, queria apenas perguntar: ${nudgeReason} Ele está alinhado com a transformação que estamos a construir juntos?`;
+    logToSheet(`[Nudge Gerado] Perfil: ${perfil}. Mensagem: ${nudge}`, "INFO");
   }
   
   return nudge;
@@ -1610,7 +1616,7 @@ function processarRespostaDoAssistente(chatId, usuario, textoRecebido, assistant
     processAssistantCompletion(transacaoParcial, chatId, usuario);
   } else {
     // Se o valor digitado for inválido, pede novamente
-    enviarMensagemTelegram(chatId, `Não consegui reconhecer "${escapeMarkdown(textoRecebido)}" como uma resposta válida. Por favor, tente novamente ou escolha uma das opções.`);
+    enviarMensagemTelegram(chatId, `Peço desculpa, sou o Zaq. Não consegui reconhecer "${escapeMarkdown(textoRecebido)}" como uma resposta válida. Por favor, tente novamente ou escolha uma das opções.`);
   }
 }
 
