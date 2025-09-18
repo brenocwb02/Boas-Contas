@@ -24,12 +24,62 @@ function checkAndSendNotifications() {
     if (userConfig.enableBudgetAlerts) sendBudgetAlerts(chatId, userConfig.usuario);
     if (userConfig.enableBillReminders) sendUpcomingBillReminders(chatId, userConfig.usuario);
     if (userConfig.enableDailySummary && isTimeForDailySummary(userConfig.dailySummaryTime)) sendDailySummary(chatId, userConfig.usuario);
-    // ATUALIZADO: A lógica semanal agora chama a nova função de insights
     if (userConfig.enableWeeklySummary && isTimeForWeeklySummary(userConfig.weeklySummaryDay, userConfig.weeklySummaryTime)) {
       generateAndSendWeeklyInsight(chatId, userConfig.usuario);
     }
+    // ### INÍCIO DA ATUALIZAÇÃO ###
+    // Adiciona a verificação de alertas de fatura, se estiver ativada na configuração do utilizador
+    if (userConfig.alertasDeFatura) {
+      sendCreditCardBillAlerts(chatId, userConfig.usuario);
+    }
+    // ### FIM DA ATUALIZAÇÃO ###
+    // VERIFICAÇÃO DE METAS ATINGIDAS ACONTECE AQUI
+    verificarMetasAtingidas(chatId, userConfig.usuario);
   }
   logToSheet("Verificação e envio de notificações concluídos.", "INFO");
+}
+
+/**
+ * NOVO: Verifica se alguma meta de poupança foi atingida e notifica o utilizador.
+ * @param {string} chatId O ID do chat do Telegram.
+ * @param {string} usuario O nome do utilizador.
+ */
+function verificarMetasAtingidas(chatId, usuario) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const metasSheet = ss.getSheetByName(SHEET_METAS);
+  const alertasSheet = ss.getSheetByName(SHEET_ALERTAS_ENVIADOS);
+  if (!metasSheet || !alertasSheet) return;
+
+  const dadosMetas = metasSheet.getDataRange().getValues();
+  const alertasEnviados = alertasSheet.getDataRange().getValues();
+  const headers = dadosMetas[0];
+  const colMap = getColumnMap(headers);
+
+  for (let i = 1; i < dadosMetas.length; i++) {
+    const linha = i + 1;
+    const nomeMeta = dadosMetas[i][colMap['Nome da Meta']];
+    const valorObjetivo = parseBrazilianFloat(String(dadosMetas[i][colMap['Valor Objetivo']] || '0'));
+    const valorSalvo = parseBrazilianFloat(String(dadosMetas[i][colMap['Valor Salvo']] || '0'));
+    const status = (dadosMetas[i][colMap['Status']] || "").toLowerCase();
+
+    if (valorSalvo >= valorObjetivo && status === 'em andamento') {
+      const alertKey = `${chatId}|meta_atingida|${nomeMeta}`;
+      if (!_jaEnviado(alertKey, alertasEnviados)) {
+        const mensagem = `🎉 Parabéns, ${escapeMarkdown(usuario.split(' ')[0])}!! 🎉\n\n` +
+                         `Você atingiu a sua meta de *${escapeMarkdown(nomeMeta)}*!\n\n` +
+                         `Objetivo: ${formatCurrency(valorObjetivo)}\n` +
+                         `Salvo: ${formatCurrency(valorSalvo)}\n\n` +
+                         `Estou a celebrar esta sua grande conquista consigo! 🥳`;
+        
+        enviarMensagemTelegram(chatId, mensagem);
+        
+        // Atualiza o status na planilha e regista o alerta
+        metasSheet.getRange(linha, colMap['Status'] + 1).setValue('Atingida');
+        alertasSheet.appendRow([new Date(), chatId, alertKey]);
+        logToSheet(`[Metas] Alerta de meta atingida enviado para '${nomeMeta}'.`, "INFO");
+      }
+    }
+  }
 }
 
 /**
@@ -92,8 +142,6 @@ function isTimeForDailySummary(timeString) {
   const now = new Date();
   const [configHour, configMinute] = timeString.split(':').map(Number);
   
-  // Verifica se a hora atual está dentro de um pequeno intervalo da hora configurada.
-  // Isso é importante porque gatilhos de tempo não são executados no milissegundo exato.
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
 
@@ -111,7 +159,7 @@ function isTimeForWeeklySummary(dayOfWeek, timeString) {
   const now = new Date();
   const [configHour, configMinute] = timeString.split(':').map(Number);
 
-  const currentDay = now.getDay(); // 0 for Sunday, 6 for Saturday
+  const currentDay = now.getDay();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
 
@@ -119,14 +167,14 @@ function isTimeForWeeklySummary(dayOfWeek, timeString) {
 }
 
 /**
- * NOVO: Verifica e envia alertas sobre fechamento e vencimento de faturas de cartão de crédito.
+ * Verifica e envia alertas sobre fechamento e vencimento de faturas de cartão de crédito.
  * @param {string} chatId O ID do chat do Telegram.
  * @param {string} usuario O nome do usuário.
  */
 function sendCreditCardBillAlerts(chatId, usuario) {
   try {
     logToSheet(`[AlertasCartao] Iniciando verificação para ${usuario} (${chatId})`, "INFO");
-    atualizarSaldosDasContas(); // Garante que os saldos e faturas estão atualizados
+    atualizarSaldosDasContas();
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const contasSheet = ss.getSheetByName(SHEET_CONTAS);
@@ -181,7 +229,7 @@ function sendCreditCardBillAlerts(chatId, usuario) {
 
 /**
  * @private
- * NOVO: Verifica se um alerta com uma chave específica já foi enviado.
+ * Verifica se um alerta com uma chave específica já foi enviado.
  * @param {string} key A chave única do alerta.
  * @param {Array<Array<any>>} sentAlertsData Os dados da aba 'AlertasEnviados'.
  * @returns {boolean} True se o alerta já foi enviado, false caso contrário.
@@ -194,6 +242,7 @@ function _jaEnviado(key, sentAlertsData) {
   }
   return false;
 }
+
 
 
 /**
@@ -489,7 +538,6 @@ function sendWeeklySummary(chatId, usuario) {
  */
 function getNotificationConfig() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  // Agora lê da aba Notificacoes_Config, conforme o plano original
   const configSheet = ss.getSheetByName(SHEET_NOTIFICACOES_CONFIG); 
 
   if (!configSheet) {
@@ -498,9 +546,8 @@ function getNotificationConfig() {
   }
 
   const data = configSheet.getDataRange().getValues();
-  const headers = data[0]; // Primeira linha são os cabeçalhos
+  const headers = data[0];
 
-  // Mapeia índices de coluna
   const colChatId = headers.indexOf('Chat ID');
   const colUsuario = headers.indexOf('Usuário');
   const colEnableBudgetAlerts = headers.indexOf('Alertas Orçamento');
@@ -510,12 +557,13 @@ function getNotificationConfig() {
   const colEnableWeeklySummary = headers.indexOf('Resumo Semanal');
   const colWeeklySummaryDay = headers.indexOf('Dia Resumo Semanal (0-6)');
   const colWeeklySummaryTime = headers.indexOf('Hora Resumo Semanal (HH:mm)');
+  // ### INÍCIO DA ATUALIZAÇÃO ###
+  const colAlertasFatura = headers.indexOf('Alertas de Fatura');
+  // ### FIM DA ATUALIZAÇÃO ###
 
-  // Verifica se as colunas essenciais para as notificações existem
-  if ([colChatId, colUsuario, colEnableBudgetAlerts, colEnableBillReminders,
-       colEnableDailySummary, colDailySummaryTime, colEnableWeeklySummary,
-       colWeeklySummaryDay, colWeeklySummaryTime].some(idx => idx === -1)) {
-    logToSheet("Colunas essenciais para 'Notificacoes_Config' ausentes. Verifique os cabeçalhos.", "ERROR");
+
+  if ([colChatId, colUsuario].some(idx => idx === -1)) {
+    logToSheet("Colunas essenciais ('Chat ID', 'Usuário') para 'Notificacoes_Config' ausentes.", "ERROR");
     return null;
   }
 
@@ -523,16 +571,20 @@ function getNotificationConfig() {
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const chatId = (row[colChatId] || "").toString().trim();
-    if (chatId) { // Apenas processa se o Chat ID não estiver vazio
+    if (chatId) {
       notificationConfig[chatId] = {
         usuario: (row[colUsuario] || "").toString().trim(),
-        enableBudgetAlerts: (row[colEnableBudgetAlerts] || "").toString().toLowerCase().trim() === 'sim',
-        enableBillReminders: (row[colEnableBillReminders] || "").toString().toLowerCase().trim() === 'sim',
-        enableDailySummary: (row[colEnableDailySummary] || "").toString().toLowerCase().trim() === 'sim',
-        dailySummaryTime: (row[colDailySummaryTime] || "").toString().trim(),
-        enableWeeklySummary: (row[colEnableWeeklySummary] || "").toString().toLowerCase().trim() === 'sim',
-        weeklySummaryDay: parseInt(row[colWeeklySummaryDay]), // 0=Domingo, 6=Sábado
-        weeklySummaryTime: (row[colWeeklySummaryTime] || "").toString().trim()
+        enableBudgetAlerts: colEnableBudgetAlerts > -1 && (row[colEnableBudgetAlerts] || "").toString().toLowerCase().trim() === 'sim',
+        enableBillReminders: colEnableBillReminders > -1 && (row[colEnableBillReminders] || "").toString().toLowerCase().trim() === 'sim',
+        enableDailySummary: colEnableDailySummary > -1 && (row[colEnableDailySummary] || "").toString().toLowerCase().trim() === 'sim',
+        dailySummaryTime: colDailySummaryTime > -1 ? (row[colDailySummaryTime] || "").toString().trim() : '',
+        enableWeeklySummary: colEnableWeeklySummary > -1 && (row[colEnableWeeklySummary] || "").toString().toLowerCase().trim() === 'sim',
+        weeklySummaryDay: colWeeklySummaryDay > -1 ? parseInt(row[colWeeklySummaryDay]) : 1, // Padrão é Segunda-feira
+        weeklySummaryTime: colWeeklySummaryTime > -1 ? (row[colWeeklySummaryTime] || "").toString().trim() : '',
+        // ### INÍCIO DA ATUALIZAÇÃO ###
+        // Lê a nova coluna. Se não existir, o valor será `false` por defeito.
+        alertasDeFatura: colAlertasFatura > -1 && (row[colAlertasFatura] || "").toString().toLowerCase().trim() === 'sim'
+        // ### FIM DA ATUALIZAÇÃO ###
       };
     }
   }
