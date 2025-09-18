@@ -15,15 +15,15 @@ const SETUP_STEPS = {
 };
 
 /**
- * **FUNÇÃO ATUALIZADA**
+ * **FUNÇÃO ATUALIZADA COM A PERSONA ZAQ**
  * Agora apenas envia a mensagem de boas-vindas e atualiza o estado.
  * @param {string} chatId O ID do chat do Telegram.
  * @param {string} usuario O nome do utilizador.
  */
 function startGuidedSetup(chatId, usuario) {
-  const message = `👋 Olá, ${escapeMarkdown(usuario)}! O seu sistema Gasto Certo está pronto.\n\n` +
-                  `Para começar, vamos configurar a sua primeira conta.\n\n` +
-                  `*Qual o nome da sua principal conta bancária?* (ex: Itaú, Nubank, Carteira)`;
+  const message = `👋 Olá, ${escapeMarkdown(usuario)}! Sou o Zaq, seu novo agente financeiro.\n\n` +
+                  `A minha missão é ajudá-lo a transformar a sua relação com o dinheiro, começando com clareza e simplicidade.\n\n` +
+                  `Vamos configurar a sua primeira conta? *Qual o nome da sua principal conta bancária?* (ex: Itaú, Nubank, Carteira)`;
   
   // Atualiza o estado para indicar que agora estamos à espera do nome da conta
   const state = {
@@ -33,7 +33,7 @@ function startGuidedSetup(chatId, usuario) {
   setGuidedSetupState(chatId, state);
   
   enviarMensagemTelegram(chatId, message);
-  logToSheet(`[Onboarding] Mensagem de início da configuração guiada enviada para ${usuario} (${chatId}).`, "INFO");
+  logToSheet(`[Onboarding] Mensagem de início da configuração guiada (Zaq) enviada para ${usuario} (${chatId}).`, "INFO");
 }
 
 /**
@@ -104,8 +104,8 @@ function processAccountType(chatId, accountType, state) {
     state.step = SETUP_STEPS.AWAITING_KEYWORD_FOR_CATEGORY;
     setGuidedSetupState(chatId, state);
 
-    const message = `Agora, vamos ensinar o bot a reconhecer um gasto comum.\n\n` +
-                    `*Diga-me uma palavra-chave para a categoria 'Alimentação'* (ex: mercado, ifood, restaurante).`;
+    const message = `Excelente! Agora, vamos tornar o bot mais inteligente. O sistema aprende com palavras-chave.\n\n` +
+                    `*Diga-me uma palavra-chave que usa para gastos com 'Alimentação'* (ex: mercado, ifood, restaurante).`;
     enviarMensagemTelegram(chatId, message);
 
   } else {
