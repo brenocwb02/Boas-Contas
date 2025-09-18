@@ -424,77 +424,92 @@ function enviarSaldo(chatId, usuario) {
 
 /**
  * Envia uma mensagem de ajuda com exemplos de comandos para o chat do Telegram.
- * VERSÃO FINAL: Inclui o botão /orcamento e remove completamente o antigo /metas.
  * @param {string} chatId O ID do chat do Telegram.
  */
 function enviarAjuda(chatId) {
   const mensagem = `
 👋 *Bem-vindo ao Boas Contas!*
 
-Aqui está um guia rápido dos comandos. Use os botões abaixo para acesso rápido!
+Aqui está um guia completo das minhas funcionalidades. Use os botões para acesso rápido aos comandos mais comuns.
 
 ---
-*💸 LANÇAMENTOS DO DIA-A-DIA*
+*💸 LANÇAMENTOS (LINGUAGEM NATURAL)*
 ---
-Para registrar, basta enviar uma mensagem.
+Para registar, basta enviar uma mensagem como se estivesse a conversar.
 
-*Gastos:* Use _gastei, paguei, comprei_.
-• \`gastei 50 no mercado com Nubank\`
-
-*Receitas:* Use _recebi, ganhei_.
-• \`recebi 3000 de salario no Itau\`
+*Gastos:* \`gastei 50 no mercado com Nubank\`
+*Receitas:* \`recebi 3000 de salario no Itau\`
+*Transferências:* \`transferi 200 do Itau para o PicPay\`
+*Parcelamentos:* \`comprei um telemóvel de 1200 em 10x\`
+*Dividir Despesas:* \`dividi 100 do jantar com a Ana pelo Itau\`
+*Empréstimos:* \`emprestei 50 para o João com o Nubank\`
 
 ---
-*📊 CONSULTAS E RELATÓRIOS*
+*📊 ANÁLISES E RELATÓRIOS*
 ---
-• \`/resumo\` – Resumo financeiro do mês.
-• \`/saldo\` – Saldo de todas as contas e faturas.
+• \`/resumo\` – Visão geral financeira do mês.
+• \`/saldo\` – Saldos de todas as contas e faturas.
 • \`/extrato\` – Suas últimas transações.
-• \`/orcamento\` – Acompanhe seu orçamento de gastos.
-• \`/statusmetas\` – Acompanhe suas metas de poupança.
-• \`/contasapagar\` – Status das suas contas fixas.
-• \`/proximasfaturas\` – Veja faturas futuras.
+• \`/saude\` – Um check-up da sua saúde financeira.
+• \`/dashboard\` – Aceder ao dashboard web completo.
 
 ---
-*🗓️ TAREFAS E LEMBRETES*
+*📈 INVESTIMENTOS*
 ---
-• \`/tarefa\` - Cria uma nova tarefa.
-  Ex: \`/tarefa Reunião amanhã às 10h\`
+• \`comprei 10 ITSA4 a 8.50 pela NuInvest\`
+• \`vendi 5 PETR4 a 32.00 para a NuInvest\`
+• \`/provento ITSA4 50 para NuInvest\` – Regista dividendos.
+• \`/patrimonio\` – Mostra o seu património líquido total.
+
+---
+*🎯 PLANEAMENTO*
+---
+• \`/orcamento\` – Acompanhe seu orçamento de gastos.
+• \`/metas\` – Veja o progresso das suas metas de poupança.
+• \`/novameta NOME VALOR\` – Cria uma nova meta.
+• \`/aportarmeta META VALOR de CONTA\` – Adiciona dinheiro a uma meta.
+• \`/contasapagar\` – Status das suas contas fixas.
+
+---
+*🗓️ PRODUTIVIDADE*
+---
+• \`/tarefa DESCRIÇÃO\` – Cria uma nova tarefa.
 • \`/tarefas\` – Lista suas tarefas pendentes.
 
 ---
 *⚙️ OUTROS COMANDOS*
 ---
-• \`/dashboard\` – Aceder ao dashboard web.
+• \`/meuperfil\` – Descubra o seu perfil financeiro.
 • \`/editar ultimo\` – Corrigir o último lançamento.
 • \`/ajuda\` – Ver esta mensagem novamente.
   `;
 
-  // Teclado de botões atualizado
+  // --- INÍCIO DA CORREÇÃO ---
+  // Reorganiza o teclado para incluir o botão /extrato e manter a estrutura de 3x3
   const teclado = {
     inline_keyboard: [
       [
         { text: "📊 Resumo", callback_data: "/resumo" },
-        { text: "💰 Saldo", callback_data: "/saldo" }
+        { text: "💰 Saldo", callback_data: "/saldo" },
+        { text: "📄 Extrato", callback_data: "/extrato" }
       ],
       [
-        // Nova linha para os comandos de planeamento
-        { text: "🧾 Orçamento", callback_data: "/orcamento" },
-        { text: "🎯 Metas", callback_data: "/metas" }
+        { text: "🩺 Saúde", callback_data: "/saude" },
+        { text: "📈 Património", callback_data: "/patrimonio" },
+        { text: "🧾 Orçamento", callback_data: "/orcamento" }
       ],
       [
-        { text: "📄 Extrato", callback_data: "/extrato" },
-        { text: "🗓️ Contas a Pagar", callback_data: "/contasapagar" }
-      ],
-      [
+        { text: "🎯 Metas", callback_data: "/metas" },
         { text: "📝 Tarefas", callback_data: "/tarefas" },
-        { text: "🌐 Dashboard Web", callback_data: "/dashboard" }
+        { text: "🌐 Dashboard", callback_data: "/dashboard" }
       ]
     ]
   };
+  // --- FIM DA CORREÇÃO ---
 
   enviarMensagemTelegram(chatId, mensagem, { reply_markup: teclado });
 }
+
 
 
 
@@ -1286,180 +1301,7 @@ function enviarContasAPagar(chatId, usuario, mes, ano) {
   logToSheet(`[ContasAPagar] Status das contas a pagar enviado para chatId: ${chatId}.`, "INFO");
 }
 
-/**
- * **FUNÇÃO CORRIGIDA**
- * Processa uma consulta em linguagem natural do usuário.
- * Ex: "quanto gastei com ifood este mês?", "listar despesas com transporte em junho"
- * @param {string} chatId O ID do chat do Telegram.
- * @param {string} usuario O nome do usuário.
- * @param {string} textoConsulta A pergunta completa do usuário.
- */
-function processarConsultaLinguagemNatural(chatId, usuario, textoConsulta) {
-  logToSheet(`[ConsultaLN] Iniciando processamento para: "${textoConsulta}"`, "INFO");
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
-  if (!transacoesSheet) {
-    enviarMensagemTelegram(chatId, "❌ Erro: Aba 'Transacoes' não encontrada para realizar a consulta.");
-    return;
-  }
-  const transacoes = transacoesSheet.getDataRange().getValues();
-  const consultaNormalizada = normalizarTexto(textoConsulta);
-
-  // --- 1. Determinar o Período de Tempo ---
-  const hoje = new Date();
-  let dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  let dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0, 23, 59, 59);
-  let periodoTexto = "este mês";
-
-  const meses = { "janeiro": 0, "fevereiro": 1, "marco": 2, "abril": 3, "maio": 4, "junho": 5, "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11 };
-  for (const nomeMes in meses) {
-    if (consultaNormalizada.includes(nomeMes)) {
-      const mesIndex = meses[nomeMes];
-      let ano = hoje.getFullYear();
-      if (mesIndex > hoje.getMonth() && !/\d{4}/.test(consultaNormalizada)) {
-        ano--;
-      }
-      dataInicio = new Date(ano, mesIndex, 1);
-      dataFim = new Date(ano, mesIndex + 1, 0, 23, 59, 59);
-      periodoTexto = `em ${capitalize(nomeMes)}`;
-      break;
-    }
-  }
-
-  if (consultaNormalizada.includes("mes passado")) {
-    dataInicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-    dataFim = new Date(hoje.getFullYear(), hoje.getMonth(), 0, 23, 59, 59);
-    periodoTexto = "no mês passado";
-  } else if (consultaNormalizada.includes("hoje")) {
-    dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-    dataFim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
-    periodoTexto = "hoje";
-  } else if (consultaNormalizada.includes("ontem")) {
-    const ontem = new Date(hoje);
-    ontem.setDate(hoje.getDate() - 1);
-    dataInicio = new Date(ontem.getFullYear(), ontem.getMonth(), ontem.getDate());
-    dataFim = new Date(ontem.getFullYear(), ontem.getMonth(), ontem.getDate(), 23, 59, 59);
-    periodoTexto = "ontem";
-  }
-
-  logToSheet(`[ConsultaLN] Período de tempo determinado: ${dataInicio.toLocaleDateString()} a ${dataFim.toLocaleDateString()} (${periodoTexto})`, "DEBUG");
-
-  // --- 2. Determinar o Tipo de Consulta e Filtros ---
-  const tipoConsulta = consultaNormalizada.includes("listar") || consultaNormalizada.includes("quais") ? "LISTAR" : "SOMAR";
-  let tipoTransacaoFiltro = null;
-  if (consultaNormalizada.includes("despesa")) tipoTransacaoFiltro = "Despesa";
-  if (consultaNormalizada.includes("receita")) tipoTransacaoFiltro = "Receita";
-  
-  const regexFiltro = /(?:com|de|sobre)\s+(.+?)(?=\s+em\s+[a-z]+|\s+este\s+mes|\s+mes\s+passado|\s+hoje|\s+ontem|$)/;
-  const matchFiltro = consultaNormalizada.match(regexFiltro);
-  
-  let filtroTexto = "";
-  if (matchFiltro) {
-    filtroTexto = matchFiltro[1].trim();
-  } else {
-    let tempConsulta = ' ' + consultaNormalizada + ' ';
-    const palavrasParaRemover = [
-      "quanto gastei", "listar despesas", "total de", "quanto recebi", "listar receitas",
-      "este mes", "mes passado", "hoje", "ontem", "do mes", "no mes",
-      "janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-      "quanto", "qual", "quais", "listar", "mostrar", "total", "despesas", "receitas", "despesa", "receita",
-      "meu", "minha", "meus", "minhas"
-    ];
-    palavrasParaRemover.sort((a,b) => b.length - a.length).forEach(palavra => {
-        tempConsulta = tempConsulta.replace(new RegExp(`\\s${palavra}\\s`, 'gi'), ' ');
-    });
-    filtroTexto = tempConsulta.trim();
-  }
-
-  logToSheet(`[ConsultaLN] Tipo: ${tipoConsulta}, Filtro de Tipo: ${tipoTransacaoFiltro || 'Nenhum'}, Filtro de Texto: "${filtroTexto}"`, "DEBUG");
-
-  // --- 3. Executar a Consulta ---
-  let totalSoma = 0;
-  let transacoesEncontradas = [];
-  
-  for (let i = 1; i < transacoes.length; i++) {
-    const linha = transacoes[i];
-    const dataTransacao = parseData(linha[0]);
-    const descricao = linha[1];
-    const categoria = linha[2];
-    const subcategoria = linha[3];
-    const tipo = linha[4];
-    const valor = parseBrazilianFloat(String(linha[5]));
-    const conta = linha[7];
-    const id = linha[13];
-
-    // Filtro por período
-    if (!dataTransacao || dataTransacao < dataInicio || dataTransacao > dataFim) {
-      continue;
-    }
-
-    // Filtro por tipo de transação (se especificado)
-    if (tipoTransacaoFiltro && normalizarTexto(tipo) === normalizarTexto(tipoTransacaoFiltro)) {
-      continue;
-    }
-
-    // Filtro por texto na descrição, categoria, subcategoria ou conta
-    const relevanteParaFiltro = (
-      normalizarTexto(descricao).includes(normalizarTexto(filtroTexto)) ||
-      normalizarTexto(categoria).includes(normalizarTexto(filtroTexto)) ||
-      normalizarTexto(subcategoria).includes(normalizarTexto(filtroTexto)) ||
-      normalizarTexto(conta).includes(normalizarTexto(filtroTexto))
-    );
-
-    if (filtroTexto && !relevanteParaFiltro) {
-        continue;
-    }
-    // Exclui pagamentos de fatura e transferências para evitar dupla contagem em consultas de "gastos" totais
-    if (tipo === "Despesa" && (normalizarTexto(categoria) === "contas a pagar" && normalizarTexto(subcategoria) === "pagamento de fatura" || normalizarTexto(categoria) === "transferencias")) {
-        logToSheet(`[ConsultaLN] Transacao ID ${id} (${categoria} > ${subcategoria}) excluida da soma/listagem (pagamento de fatura/transferencia).`, "DEBUG");
-        continue;
-    }
-    if (tipo === "Receita" && normalizarTexto(categoria) === "transferencias") {
-        logToSheet(`[ConsultaLN] Transacao ID ${id} (${categoria} > ${subcategoria}) excluida da soma/listagem (transferencia).`, "DEBUG");
-        continue;
-    }
-
-    if (tipoConsulta === "SOMAR") {
-      totalSoma += valor;
-    } else { // LISTAR
-      transacoesEncontradas.push({
-        data: Utilities.formatDate(dataTransacao, Session.getScriptTimeZone(), "dd/MM/yyyy"),
-        descricao: descricao,
-        categoria: categoria,
-        subcategoria: subcategoria,
-        tipo: tipo,
-        valor: valor,
-        conta: conta,
-        id: id // Inclui ID para possível exclusão
-      });
-    }
-  }
-
-  let mensagemResposta = "";
-  if (tipoConsulta === "SOMAR") {
-    let prefixoTipo = tipoTransacaoFiltro === "Receita" ? "Receita" : "Gasto";
-    mensagemResposta = `O *total de ${prefixoTipo}* ${filtroTexto ? `com "${escapeMarkdown(filtroTexto)}"` : ""} ${periodoTexto} é de: *${formatCurrency(totalSoma)}*.`;
-  } else { // LISTAR
-    if (transacoesEncontradas.length > 0) {
-      mensagemResposta = `*Lancamentos ${filtroTexto ? `com "${escapeMarkdown(filtroTexto)}"` : ""} ${periodoTexto}:*\n\n`;
-      transacoesEncontradas.sort((a, b) => parseData(b.data).getTime() - parseData(a.data).getTime()); // Mais recente primeiro
-      transacoesEncontradas.slice(0, 10).forEach(t => { // Limita a 10 para não sobrecarregar
-        const valorFormatado = formatCurrency(t.valor);
-        const tipoIcon = t.tipo === "Receita" ? "💰" : "💸";
-        mensagemResposta += `${tipoIcon} ${escapeMarkdown(t.descricao)} (${escapeMarkdown(t.categoria)} > ${escapeMarkdown(t.subcategoria)}) - *${valorFormatado}*\n`;
-      });
-      if (transacoesEncontradas.length > 10) {
-        mensagemResposta += `\n...e mais ${transacoesEncontradas.length - 10} lancamentos.`;
-      }
-    } else {
-      mensagemResposta = `Nenhum lançamento ${filtroTexto ? `com "${escapeMarkdown(filtroTexto)}"` : ""} encontrado ${periodoTexto}.`;
-    }
-  }
-
-  enviarMensagemTelegram(chatId, mensagemResposta);
-  logToSheet(`[ConsultaLN] Resposta enviada para ${chatId}: "${mensagemResposta.substring(0, 100)}..."`, "INFO");
-}
 
 /**
  * MODIFICADO: Inicia o processo de edição da última transação do usuário.
@@ -2992,3 +2834,40 @@ function handleEmprestarValor(chatId, usuario, valor, pessoaEDesc, conta) {
   }
 }
 
+/**
+ * NOVO: Inicia o fluxo para importação de faturas/extratos.
+ * @param {string} chatId O ID do chat do Telegram.
+ */
+function handleImportarCommand(chatId) {
+  const mensagem = `🧾 *Importação de Fatura/Extrato*\n\n` +
+                   `Para importar os seus lançamentos de uma só vez, utilize a ferramenta de **Conciliação Bancária** no seu dashboard web.\n\n` +
+                   `Ela aceita ficheiros nos formatos \`.CSV\` e \`.OFX\`, que pode descarregar do site do seu banco.\n\n` +
+                   `Vou gerar um link de acesso seguro para si. Clique nele para abrir o dashboard e começar.`;
+
+  enviarMensagemTelegram(chatId, mensagem);
+  enviarLinkDashboard(chatId); // Reutiliza a função que gera o link seguro
+}
+
+/**
+ * NOVO: Lida com o comando para forçar o arquivamento de transações.
+ * Apenas o administrador do sistema pode executar este comando.
+ * @param {string} chatId O ID do chat do Telegram.
+ */
+function handleArquivarAgoraCommand(chatId) {
+  logToSheet(`Comando /arquivar_agora recebido pelo chatId ${chatId}.`, "INFO");
+  const adminChatId = getAdminChatIdFromProperties();
+
+  if (chatId.toString() !== adminChatId.toString()) {
+    enviarMensagemTelegram(chatId, "❌ Apenas o administrador do sistema pode executar este comando.");
+    logToSheet(`Tentativa não autorizada de executar /arquivar_agora pelo chatId ${chatId}.`, "WARN");
+    return;
+  }
+
+  try {
+    enviarMensagemTelegram(chatId, "🔐 Ação de administrador confirmada. Iniciando o arquivamento manual de transações antigas... Isto pode demorar um momento.");
+    // A função arquivarTransacoesAntigas já envia uma mensagem de conclusão.
+    arquivarTransacoesAntigas();
+  } catch (e) {
+    handleError(e, "handleArquivarAgoraCommand", chatId);
+  }
+}
