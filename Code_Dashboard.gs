@@ -604,20 +604,12 @@ function addTransactionFromWeb(transactionData) {
 
     const newTransactionId = Utilities.getUuid();
     
-    let formattedDueDate = '';
-    if (transactionData.dueDate) {
-      const dateObject = new Date(transactionData.dueDate + 'T00:00:00');
-      formattedDueDate = Utilities.formatDate(dateObject, Session.getScriptTimeZone(), "dd/MM/yyyy");
-    }
-
-    let formattedTransactionDate = '';
-    if (transactionData.date) {
-        const dateObject = new Date(transactionData.date + 'T00:00:00');
-        formattedTransactionDate = Utilities.formatDate(dateObject, Session.getScriptTimeZone(), "dd/MM/yyyy");
-    }
+    // CORREÇÃO: Usar objetos Date
+    const dateObject = transactionData.date ? new Date(transactionData.date + 'T00:00:00') : new Date();
+    const dueDateObject = transactionData.dueDate ? new Date(transactionData.dueDate + 'T00:00:00') : dateObject;
 
     const newRow = [
-      formattedTransactionDate,
+      dateObject, // Data
       transactionData.description,
       transactionData.category || '',
       transactionData.subcategory || '',
@@ -627,11 +619,11 @@ function addTransactionFromWeb(transactionData) {
       transactionData.account,
       transactionData.installments,
       1,
-      formattedDueDate,
+      dueDateObject, // Data Vencimento
       '', // Usuário (será preenchido se necessário no futuro)
       'Ativo',
       newTransactionId,
-      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss")
+      new Date() // Data de Registro
     ];
 
     sheet.appendRow(newRow);
@@ -735,7 +727,12 @@ function updateTransactionFromWeb(transactionData) {
 
     if (rowIndexToUpdate !== -1) {
       const rowIndex = rowIndexToUpdate + 2;
-      sheet.getRange(rowIndex, colMap["Data"] + 1).setValue(new Date(transactionData.date + 'T00:00:00'));
+      
+      // CORREÇÃO: Usar objetos Date
+      const dateObject = new Date(transactionData.date + 'T00:00:00');
+      const dueDateObject = new Date((transactionData.dueDate || transactionData.date) + 'T00:00:00');
+      
+      sheet.getRange(rowIndex, colMap["Data"] + 1).setValue(dateObject);
       sheet.getRange(rowIndex, colMap["Descricao"] + 1).setValue(transactionData.description);
       sheet.getRange(rowIndex, colMap["Categoria"] + 1).setValue(transactionData.category);
       sheet.getRange(rowIndex, colMap["Subcategoria"] + 1).setValue(transactionData.subcategory);
@@ -744,7 +741,7 @@ function updateTransactionFromWeb(transactionData) {
       sheet.getRange(rowIndex, colMap["Metodo de Pagamento"] + 1).setValue(transactionData.paymentMethod);
       sheet.getRange(rowIndex, colMap["Conta/Cartão"] + 1).setValue(transactionData.account);
       sheet.getRange(rowIndex, colMap["Parcelas Totais"] + 1).setValue(parseInt(transactionData.installments));
-      sheet.getRange(rowIndex, colMap["Data de Vencimento"] + 1).setValue(new Date((transactionData.dueDate || transactionData.date) + 'T00:00:00'));
+      sheet.getRange(rowIndex, colMap["Data de Vencimento"] + 1).setValue(dueDateObject);
       
       atualizarSaldosDasContas();
       
@@ -998,3 +995,115 @@ function getDashboardLayout() {
 // ===================================================================================
 // ##       FIM DO NOVO CÓDIGO DE PERSONALIZAÇÃO DO DASHBOARD (BACKEND)            ##
 // ===================================================================================
+
+/**
+ * NOVO: Recebe um lote de transações (do "colar") e as adiciona na planilha.
+ * @param {Array<Object>} transactions - Array de objetos de transação { date: "DD/MM", description: "...", value: 10.65 }.
+ * @param {string} accountName - O nome da conta/cartão selecionada no dropdown.
+ * @param {string} transactionType - O tipo ("Despesa" ou "Receita").
+ * @param {number} year - O ano selecionado no filtro do dashboard.
+ * @returns {Object} Objeto com status de sucesso ou erro e os dados atualizados do dashboard.
+ */
+function addBatchTransactionsFromWeb(transactions, accountName, transactionType, year) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const transacoesSheet = ss.getSheetByName(SHEET_TRANSACOES);
+    if (!transacoesSheet) throw new Error("Aba 'Transacoes' não encontrada.");
+    
+    // Obter dados necessários para o processamento
+    const dadosPalavras = getSheetDataWithCache(SHEET_PALAVRAS_CHAVE, CACHE_KEY_PALAVRAS);
+    const dadosContas = getSheetDataWithCache(SHEET_CONTAS, CACHE_KEY_CONTAS);
+    
+    // Obter informações da conta de destino
+    const infoConta = obterInformacoesDaConta(accountName, dadosContas);
+    if (!infoConta) throw new Error(`Conta '${accountName}' não encontrada.`);
+
+    const timezone = ss.getSpreadsheetTimeZone();
+    const rowsToAdd = [];
+    const dataRegistro = new Date(); // Objeto Date
+    let mesDaPrimeiraTransacao = new Date().getMonth() + 1; // Padrão
+
+    for (const tx of transactions) {
+      if (!tx.date || !tx.description || isNaN(tx.value) || tx.value <= 0) {
+        logToSheet(`[Import Lote] Transação ignorada por dados inválidos: ${JSON.stringify(tx)}`, "WARN");
+        continue;
+      }
+        
+      const [day, month] = tx.date.split('/');
+      const txMonth = parseInt(month, 10);
+      const txDay = parseInt(day, 10);
+      
+      if(isNaN(txMonth) || isNaN(txDay)) {
+        logToSheet(`[Import Lote] Data inválida ignorada: ${tx.date}`, "WARN");
+        continue;
+      }
+      
+      // Define o mês de referência para atualizar o dashboard no final
+      if (rowsToAdd.length === 0) {
+        mesDaPrimeiraTransacao = txMonth;
+      }
+
+      // **CORREÇÃO APLICADA AQUI**
+      const txDate = new Date(year, txMonth - 1, txDay); // Objeto Date
+      
+      // Tenta categorizar automaticamente
+      const { categoria, subcategoria } = extrairCategoriaSubcategoria(normalizarTexto(tx.description), transactionType, dadosPalavras);
+      
+      let dataVencimento = txDate; // Objeto Date
+      let metodoPagamento = "Débito"; // Padrão
+      
+      // **CORREÇÃO APLICADA AQUI**
+      // Se for um cartão de crédito, calcula o vencimento e define o método
+      if (infoConta && normalizarTexto(infoConta.tipo) === "cartao de credito") { // Verifica "cartao de credito" (normalizado)
+        dataVencimento = calcularVencimentoCartao(infoConta, txDate, dadosContas); // Objeto Date
+        metodoPagamento = "Crédito";
+      }
+
+      rowsToAdd.push([
+        txDate, // Data (Objeto Date)
+        tx.description, // Descricao
+        categoria, // Categoria
+        subcategoria, // Subcategoria
+        transactionType, // Tipo
+        tx.value, // Valor
+        metodoPagamento, // Metodo de Pagamento
+        accountName, // Conta/Cartão
+        1, // Parcelas Totais
+        1, // Parcela Atual
+        dataVencimento, // Data de Vencimento (Objeto Date)
+        "Importado Lote", // Usuario
+        "Ativo", // Status
+        Utilities.getUuid(), // ID Transacao
+        dataRegistro // Data de Registro (Objeto Date)
+      ]);
+    }
+
+    if (rowsToAdd.length > 0) {
+      transacoesSheet.getRange(transacoesSheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length)
+                     .setValues(rowsToAdd); // Envia os objetos Date
+      logToSheet(`[Import Lote] ${rowsToAdd.length} transações importadas em lote com sucesso para a conta ${accountName}.`, "INFO");
+    } else {
+      throw new Error("Nenhuma transação válida encontrada nos dados colados.");
+    }
+
+    // Atualiza os saldos de todas as contas
+    atualizarSaldosDasContas();
+    
+    // Retorna os dados atualizados do dashboard
+    const dashboardData = getDashboardData(mesDaPrimeiraTransacao, year);
+    
+    return { 
+      success: true, 
+      message: `${rowsToAdd.length} transações importadas com sucesso.`,
+      dashboardData: dashboardData 
+    };
+
+  } catch (e) {
+    handleError(e, "addBatchTransactionsFromWeb");
+    return { success: false, message: 'Erro ao importar em lote: ' + e.message };
+  } finally {
+    if(lock.hasLock()) lock.releaseLock();
+  }
+}
