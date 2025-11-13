@@ -291,7 +291,16 @@ function doPost(e) {
       answerCallbackQuery(data.callback_query.id);
       logToSheet(`Callback query ID ${data.callback_query.id} reconhecida.`, "DEBUG");
 
-      if (textoRecebido.startsWith('confirm_')) {
+      // --- INÍCIO DA CORREÇÃO: Lógica para "Marcar Pago" ---
+      // Intercepta os callbacks de "marcar_pago" ANTES da lógica genérica "confirm_"
+      if (textoRecebido.startsWith('confirm_marcar_pago_')) {
+          comandoBase = "/handle_marcar_pago_confirm";
+          complemento = textoRecebido.substring('confirm_'.length); // ex: "marcar_pago_sem_transacao_ID"
+      }
+      // --- FIM DA CORREÇÃO ---
+
+      // ### CORREÇÃO APLICADA AQUI: de "if" para "else if" ###
+      else if (textoRecebido.startsWith('confirm_')) { 
         comandoBase = "/confirm";
         complemento = textoRecebido.substring('confirm_'.length);
       } else if (textoRecebido.startsWith('cancel_')) {
@@ -541,6 +550,28 @@ function doPost(e) {
           }
         }
         return;
+
+      // --- INÍCIO DA CORREÇÃO: Adicionar o novo case para a confirmação ---
+      case "/handle_marcar_pago_confirm":
+        logToSheet(`[doPost] Processando confirmação de Marcar Pago. Complemento: ${complemento}`, "INFO");
+        try {
+            // O complemento é algo como "marcar_pago_sem_transacao_ID" ou "marcar_pago_e_registrar_ID"
+            const parts = complemento.split('_');
+            const idContaAPagar = parts.pop();
+            // Recria a ação, ex: "marcar_pago_sem_transacao"
+            const action = complemento.substring(0, complemento.lastIndexOf(`_${idContaAPagar}`)).substring("marcar_pago_".length); 
+
+            if (action && idContaAPagar) {
+                // Chama a função que já existe em Commands.gs
+                handleMarcarPagoConfirmation(chatId, action, idContaAPagar, usuario);
+            } else {
+                throw new Error(`Complemento de callback inválido: ${complemento}`);
+            }
+        } catch (e) {
+            handleError(e, "handle_marcar_pago_confirm", chatId);
+        }
+        return;
+      // --- FIM DA CORREÇÃO ---
 
       case "/dashboard":
         logToSheet(`Comando /dashboard detectado.`, "INFO");
@@ -1188,5 +1219,3 @@ function exibirDashboardModerno() {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   SpreadsheetApp.getUi().showSidebar(html);
 }
-
-
